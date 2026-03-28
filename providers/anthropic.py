@@ -1,5 +1,5 @@
 from typing import Final
-from model import MemoryProvider
+from schema import MemoryProvider
 from anthropic import Anthropic
 
 

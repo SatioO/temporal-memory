@@ -1,10 +1,8 @@
-from ast import Dict
 import os
 from functools import lru_cache
 from typing import Optional
-from unittest.loader import VALID_MODULE_NAME
 
-from model import AgentMemoryConfig, EmbeddingConfig, FallbackConfig, ProviderConfig, TeamConfig
+from schema import AgentMemoryConfig, EmbeddingConfig, FallbackConfig, ProviderConfig, TeamConfig
 
 
 DATA_DIR = os.path.join(os.path.expanduser("~"), ".graphmind")
@@ -108,8 +106,8 @@ def load_config() -> AgentMemoryConfig:
     return AgentMemoryConfig(
         engine_url=_get_env(
             "III_ENGINE_URL", "ws://localhost:49134"),
-        rest_port=safe_int(_get_env("III_REST_PORT", "3111"), 3111),
-        streams_port=safe_int(_get_env("III_STREAMS_PORT", "3112"), 3112),
+        rest_port=safe_int(_get_env("III_REST_PORT"), "3111"),
+        streams_port=safe_int(_get_env("III_STREAMS_PORT"), "3112"),
         provider=provider,
         token_budget=safe_int(_get_env("TOKEN_BUDGET"), "2000"),
         max_observations_per_session=safe_int(
@@ -121,8 +119,8 @@ def load_config() -> AgentMemoryConfig:
 
 
 def load_embedding_config() -> EmbeddingConfig:
-    bm25_weight = safe_float(os.getenv("BM25_WEIGHT", "0.4"), 0.4)
-    vector_weight = safe_float(os.getenv("VECTOR_WEIGHT", "0.6"), 0.6)
+    bm25_weight = safe_float(os.getenv("BM25_WEIGHT"), "0.4")
+    vector_weight = safe_float(os.getenv("VECTOR_WEIGHT"), "0.6")
 
     bm25_weight = 0.4 if bm25_weight < 0 else min(bm25_weight, 1)
     vector_weight = 0.6 if vector_weight < 0 else min(vector_weight, 1)

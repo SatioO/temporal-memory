@@ -3,7 +3,7 @@ from typing import Optional
 from math import floor, isfinite
 from dataclasses import dataclass
 
-from model import CircuitBreakerSnapshot, CircuitBreakerState
+from schema import CircuitBreakerSnapshot, CircuitBreakerState
 
 
 @dataclass

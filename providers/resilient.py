@@ -1,6 +1,6 @@
 
 from typing import Awaitable, Callable
-from model import MemoryProvider
+from schema import MemoryProvider
 from providers.circuit_breaker import CircuitBreaker
 
 

@@ -1,5 +1,5 @@
 from typing import List
-from model import FallbackConfig, MemoryProvider, ProviderConfig
+from schema import FallbackConfig, MemoryProvider, ProviderConfig
 from providers.anthropic import AnthropicProvider
 from providers.fallback_chain import FallbackChain
 from providers.resilient import ResilientProvider

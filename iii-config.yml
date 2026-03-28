@@ -39,7 +39,7 @@ modules:
   - class: modules::observability::OtelModule
     config:
       enabled: true
-      service_name: agentmemory
+      service_name: graphmind
       exporter: memory
       logs_enabled: true
 

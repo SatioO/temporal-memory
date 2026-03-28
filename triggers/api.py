@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
 import os
+from datetime import datetime, timezone
 from typing import Optional, TypedDict, Union
 from iii import ApiRequest, IIIClient, RegisterFunctionInput, RegisterTriggerInput, Logger, ApiResponse
 
-from model import Session
+from schema import Session
 from providers.resilient import ResilientProvider
 from state.kv import StateKV
 from state.schema import KV
@@ -40,7 +40,7 @@ async def handle_session_start(req: ApiRequest[SessionStartPayload], kv: StateKV
         observation_count=0
     )
 
-    await kv.set(KV["sessions"], session_id, session)
+    await kv.set(KV.sessions, session_id, session)
 
     return ApiResponse(
         status_code=200,

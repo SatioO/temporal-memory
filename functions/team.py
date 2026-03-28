@@ -1,6 +1,6 @@
 from typing import Literal, TypedDict
 from iii import IIIClient, RegisterFunctionInput
-from model import TeamConfig
+from schema import TeamConfig
 from state.kv import StateKV
 
 

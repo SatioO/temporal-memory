@@ -1,6 +1,6 @@
 import os
 from typing import Final, List, Optional
-from model import EmbeddingProvider
+from schema import EmbeddingProvider
 
 API_URL = "https://api.openai.com/v1/embeddings"
 

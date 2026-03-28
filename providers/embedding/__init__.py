@@ -1,7 +1,7 @@
 from typing import Optional
 
 from config import detect_embedding_provider
-from model import EmbeddingProvider
+from schema import EmbeddingProvider
 
 # TODO: add more embedding providers
 def create_embedding_provider() -> Optional[EmbeddingProvider]:

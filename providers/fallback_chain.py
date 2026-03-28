@@ -1,5 +1,5 @@
 from typing import Awaitable, Callable, List
-from model import MemoryProvider
+from schema import MemoryProvider
 
 
 class FallbackChain(MemoryProvider):
