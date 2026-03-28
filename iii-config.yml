@@ -35,3 +35,17 @@ modules:
     config:
       port: 3112
       host: 0.0.0.0
+
+  - class: modules::observability::OtelModule
+    config:
+      enabled: true
+      service_name: agentmemory
+      exporter: memory
+      logs_enabled: true
+
+  - class: modules::shell::ExecModule
+    config:
+      watch:
+        - src/**/*.ts
+      exec:
+        - node dist/index.mjs

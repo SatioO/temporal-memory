@@ -1,0 +1,3 @@
+KV = {
+    "sessions": "mem:sessions",
+}

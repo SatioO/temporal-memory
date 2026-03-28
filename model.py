@@ -1,9 +1,22 @@
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from enum import Enum
-from typing import Awaitable, Callable, List, Literal, Optional, TypedDict
+from typing import List, Literal, Optional, TypedDict
 
 ProviderType = Literal["agent-sdk", "anthropic", "gemini", "openrouter"]
+
+
+@dataclass
+class Session:
+    id: str
+    project: str
+    cwd: str
+    started_at: str
+    ended_at: Optional[str] = None
+    status: Literal["active", "completed", "abandoned"] = "active"
+    observation_count: int = 0
+    model: Optional[str] = None
+    tags: Optional[str] = None
 
 
 @dataclass

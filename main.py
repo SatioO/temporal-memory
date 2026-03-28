@@ -1,10 +1,9 @@
 import signal
 import threading
-from iii import OtelConfig, register_worker, InitOptions
+from iii import register_worker, InitOptions
 
 from config import load_config, load_embedding_config, load_fallback_config, load_team_config
 from functions.team import register_team_function
-from model import OtelConfigSettings
 from providers.embedding import create_embedding_provider
 from providers import create_fallback_provider, create_provider
 from state.kv import StateKV
@@ -13,7 +12,6 @@ from triggers.api import register_api_triggers
 
 def main():
     config = load_config()
-    embedding_config = load_embedding_config()
     fallback_config = load_fallback_config()
 
     provider = create_fallback_provider(config.provider, fallback_config)\
@@ -38,7 +36,6 @@ def main():
         f"[graphmind] REST API: http://localhost:{config.rest_port}/graphmind/*",
     )
     print(f"[graphmind] Streams: ws://localhost:{config.streams_port}")
-    otel_config = OtelConfigSettings()
 
     sdk = register_worker(
         config.engine_url,
