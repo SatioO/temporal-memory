@@ -112,16 +112,17 @@ The following bugs are fixed as part of this migration. Apply them in order — 
 
 3. **`ContextHandlerParams.budget` and dict-style access in `handle_context`** — two issues from the same TypedDict-to-dataclass conversion:
    - `TypedDict` with an `Optional[int]` field but no `total=False`, making `budget` technically required at runtime.
-   - `handle_context` accesses params via dict-style subscripts that all break after conversion to `@dataclass`: `data.get("budget", token_budget)` (line 22), `data["project"]` (line 26), `data["project"]` and `data["session_id"]` inside the filter lambda (lines 37–38).
+   - `handle_context` uses dict-style access on `data` (the `ContextHandlerParams` argument) in two places that break after conversion to `@dataclass`: `data.get("budget", token_budget)` (line 22) and `data["project"]` (line 26).
 
-   Fix: move to `@dataclass` with `budget: Optional[int] = None`, change all four accesses to attribute-style:
+   Fix: move to `@dataclass` with `budget: Optional[int] = None`, change both `ContextHandlerParams` dict accesses to attribute-style:
    - `data.get("budget", token_budget)` → `data.budget if data.budget is not None else token_budget`
-   - `data["project"]` → `data.project`
-   - `data["session_id"]` → `data.session_id`
+   - `data["project"]` (line 26) → `data.project`
+
+   Note: the filter lambda at lines 37–38 uses `s["project"]` and `s["id"]` where `s` is a `Session` loop variable — those are Session dict accesses, not `ContextHandlerParams` accesses, and are fixed by Bug Fix 4's `model_validate` coercion at the `kv.list` callsite.
 
    Also update `handle_context` to return `ContextResponse(context=...)` instead of a plain dict literal. `ContextResponse` is currently a TypedDict never actually instantiated — converting it to `@dataclass` and instantiating it at the return site enforces the L3 convention (typed return values) and guards against future callers expecting a typed object rather than a raw dict.
 
-4. **`Session` inside `SessionStartResponse(BaseModel)`** — the `iii` KV store deserializes stored objects as plain dicts, not typed instances. When `Session` is a `@dataclass`, Pydantic will not coerce an incoming dict into a `Session` instance automatically, leading to untyped dict access propagating through the codebase (e.g., `s["project"]` in `functions/context.py`). Fix: convert `Session` to Pydantic `BaseModel` (L2) so Pydantic handles coercion at every boundary. **Apply this before Bug Fix 5**, which depends on `Session` being a Pydantic model.
+4. **`Session` inside `SessionStartResponse(BaseModel)`** — the `iii` KV store deserializes stored objects as plain dicts, not typed instances. When `Session` is a `@dataclass`, Pydantic will not coerce an incoming dict into a `Session` instance automatically, leading to untyped dict access propagating through the codebase (e.g., `s["project"]` and `s["id"]` in `functions/context.py` lines 37–38). Fix: convert `Session` to Pydantic `BaseModel` (L2) so `Session.model_validate(raw)` can be applied at every KV read callsite. After applying `model_validate`, the `s["project"]` → `s.project` and `s["id"]` → `s.id` attribute accesses in the filter lambda become valid. Also update `handle_session_start` line 53: `await kv.set(KV.sessions, payload.session_id, session)` must become `await kv.set(KV.sessions, payload.session_id, session.model_dump())` per the `model_dump()` convention on KV writes. **Apply this before Bug Fix 5**, which depends on `Session` being a Pydantic model.
 
 5. **`handle_session_end` dict mutation, null-check ordering, and wrong response shape** — three bugs in one block (depends on Bug Fix 4):
    - `{**session, "ended_at": ..., "status": ...}` spreads `session` before the null check, so if `session` is `None` the spread raises `TypeError` before the guard is reached.
