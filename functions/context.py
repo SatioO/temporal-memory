@@ -24,7 +24,7 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
     async def handle_context(data: ContextHandlerParams):
         budget = data.budget if data.budget is not None else token_budget
         blocks: List[ContextBlock] = []
-        print(f"recieved: {data}")
+        print(f"received: {data}")
 
         profile: ProjectProfile = await kv.get(KV.profiles, data.project)
         if profile is not None:

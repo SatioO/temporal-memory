@@ -1,4 +1,3 @@
-from dataclasses import fields
 from functions.context import ContextHandlerParams, ContextResponse
 
 
