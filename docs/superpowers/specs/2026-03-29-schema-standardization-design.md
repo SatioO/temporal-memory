@@ -112,9 +112,14 @@ The following bugs are fixed as part of this migration. Apply them in order — 
 
 3. **`ContextHandlerParams.budget` and dict-style access in `handle_context`** — two issues from the same TypedDict-to-dataclass conversion:
    - `TypedDict` with an `Optional[int]` field but no `total=False`, making `budget` technically required at runtime.
-   - `handle_context` accesses params via `data.get("budget", token_budget)` (dict-style). After conversion to `@dataclass` this raises `TypeError`.
+   - `handle_context` accesses params via dict-style subscripts that all break after conversion to `@dataclass`: `data.get("budget", token_budget)` (line 22), `data["project"]` (line 26), `data["project"]` and `data["session_id"]` inside the filter lambda (lines 37–38).
 
-   Fix: move to `@dataclass` with `budget: Optional[int] = None`, change all dict-style `data["field"]` and `data.get("field", default)` accesses in `handle_context` to attribute-style (`data.field`, `data.budget if data.budget is not None else token_budget`), and update the handler to return `ContextResponse(context=...)` instead of a plain dict literal.
+   Fix: move to `@dataclass` with `budget: Optional[int] = None`, change all four accesses to attribute-style:
+   - `data.get("budget", token_budget)` → `data.budget if data.budget is not None else token_budget`
+   - `data["project"]` → `data.project`
+   - `data["session_id"]` → `data.session_id`
+
+   Also update `handle_context` to return `ContextResponse(context=...)` instead of a plain dict literal. `ContextResponse` is currently a TypedDict never actually instantiated — converting it to `@dataclass` and instantiating it at the return site enforces the L3 convention (typed return values) and guards against future callers expecting a typed object rather than a raw dict.
 
 4. **`Session` inside `SessionStartResponse(BaseModel)`** — the `iii` KV store deserializes stored objects as plain dicts, not typed instances. When `Session` is a `@dataclass`, Pydantic will not coerce an incoming dict into a `Session` instance automatically, leading to untyped dict access propagating through the codebase (e.g., `s["project"]` in `functions/context.py`). Fix: convert `Session` to Pydantic `BaseModel` (L2) so Pydantic handles coercion at every boundary. **Apply this before Bug Fix 5**, which depends on `Session` being a Pydantic model.
 
@@ -123,9 +128,9 @@ The following bugs are fixed as part of this migration. Apply them in order — 
    - The mutation produces an untyped dict instead of a typed object.
    - The return body is `{"session": modified_session}` but `SessionEndResponse` only has `success: bool` — the key `session` does not exist on the declared response type.
 
-   Note on KV deserialization: `StateKV.get` returns whatever the `iii` SDK gives back, which is a plain dict at runtime. Even after `Session` becomes a Pydantic `BaseModel`, `kv.get` does not automatically coerce the result. A `Session.model_validate(raw)` call is required after `kv.get` to produce a typed `Session` instance before calling `model_copy`. The same pattern applies everywhere a domain model is read from KV.
+   Note on KV read/write serialization: `StateKV.get` returns whatever the `iii` SDK gives back at runtime (a plain dict). `StateKV.set` passes `value` directly into a `TriggerRequest` payload — whether the `iii` SDK accepts Pydantic model instances or requires plain dicts is not guaranteed. To be safe and portable, apply `.model_validate(raw)` on every KV read and `.model_dump()` on every KV write of an L2 model. This makes coercion explicit at the boundary and removes the dependency on undocumented SDK behavior.
 
-   Fix: move the null check first, coerce the raw KV result with `model_validate`, use `model_copy`, and correct the return body:
+   Fix: move the null check first, coerce the raw KV result with `model_validate`, use `model_copy`, call `.model_dump()` on write, and correct the return body. The current code also lacks a 404 branch entirely — the null guard is a new addition:
    ```python
    raw = await kv.get(KV.sessions, body.session_id)
    if raw is None:
@@ -135,11 +140,11 @@ The following bugs are fixed as part of this migration. Apply them in order — 
        "ended_at": datetime.now(timezone.utc).isoformat(),
        "status": SessionStatus.COMPLETED
    })
-   await kv.set(KV.sessions, body.session_id, modified_session)
+   await kv.set(KV.sessions, body.session_id, modified_session.model_dump())
    return ApiResponse(statusCode=200, body={"success": True})
    ```
 
-   The `model_validate` pattern applies to all L2 models read back from KV — this is the standard coercion point at the storage boundary.
+   The `model_validate` / `.model_dump()` pattern applies to all L2 models at every KV read/write callsite — this is the standard coercion convention at the storage boundary.
 
 6. **`SessionStartPayload` missing `model` field** — `handle_session_start` passes `model=payload.model` to the `Session(...)` constructor, but `SessionStartPayload` declares only `session_id`, `project`, and `cwd`. This raises `AttributeError` on every session start call. Fix: add `model: Optional[str] = None` to `SessionStartPayload`.
 
@@ -172,7 +177,7 @@ In `handle_session_start`, the `Session` (L2) is constructed and stored, the con
 - `state/schema.py` (KV key constants) is not affected
 - `state/kv.py` (StateKV client) is not affected
 - Root-level `config.py` (config construction logic) is not affected — it will import from `schema/config.py` instead of `schema.py`
-- The `iii` SDK handles serialization (write) to the KV store without changes. On reads, the SDK returns plain dicts — `Session.model_validate(raw)` (and equivalent for other L2 models) must be applied at every KV read callsite to coerce the result to a typed instance. `StateKV` itself does not change.
+- `StateKV` itself does not change. L2 models use `Model.model_validate(raw)` on every KV read and `.model_dump()` on every KV write as the standard coercion convention at the storage boundary.
 
 ---
 
