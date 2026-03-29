@@ -32,6 +32,13 @@ def test_session_instantiation():
     assert s.tags is None
 
 
+def test_session_requires_id_and_project():
+    import pytest
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Session(cwd="/tmp", started_at="2026-03-29T00:00:00+00:00")  # missing id and project
+
+
 def test_session_model_validate_from_dict():
     # KV store returns plain dicts — model_validate must coerce them
     raw = {
