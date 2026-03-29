@@ -62,8 +62,8 @@ class ContextBlock(BaseModel):
 class CircuitBreakerSnapshot(BaseModel):
     state: CircuitBreakerState
     failures: int
-    last_failure_at: Optional[float]
-    opened_at: Optional[float]
+    last_failure_at: Optional[float] = None
+    opened_at: Optional[float] = None
 
 
 class EmbeddingProvider(ABC):
