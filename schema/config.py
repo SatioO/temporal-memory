@@ -45,9 +45,9 @@ class TeamConfig:
 @dataclass
 class CloudBridgeConfig:
     enabled: bool
-    project_path: str
     memory_file_path: str
     line_budget: int
+    project_path: Optional[str] = None
 
 
 @dataclass

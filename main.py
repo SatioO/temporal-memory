@@ -2,7 +2,9 @@ import signal
 import threading
 from iii import register_worker, InitOptions
 
-from config import load_config, load_embedding_config, load_fallback_config, load_team_config
+from config import load_claude_bridge_config, load_config, load_embedding_config, load_fallback_config, load_team_config
+from functions.claude_bridge import register_claude_bridge_function
+from functions.context import register_context_function
 from functions.team import register_team_function
 from providers.embedding import create_embedding_provider
 from providers import create_fallback_provider, create_provider
@@ -43,6 +45,8 @@ def main():
     )
     kv = StateKV(sdk=sdk)
 
+    register_context_function(sdk, kv, config.token_budget)
+
     team_config = load_team_config()
     if team_config:
         register_team_function(sdk, kv, team_config)
@@ -50,6 +54,12 @@ def main():
             f"[graphmind] team memory: {team_config.team_id} ({team_config.mode})")
 
     register_api_triggers(sdk, kv)
+
+    claude_bridge_config = load_claude_bridge_config()
+    if claude_bridge_config.enabled:
+        register_claude_bridge_function(sdk, kv, claude_bridge_config)
+        print(
+            f"[graphmind] claude bridge syncing to {claude_bridge_config.memory_file_path}")
 
     stop_event = threading.Event()
 

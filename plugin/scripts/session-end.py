@@ -101,40 +101,50 @@ def main() -> None:
 
     data = read_json_stdin() or {}
     session_id = data.get("session_id") or "unknown"
-    project = data.get("cwd") or os.getcwd()
-
-    log(
-        f"[graphmind] SessionStart hook: session_id={session_id}, cwd={project}")
 
     try:
         res = fetch(
-            url=f"{REST_URL}/graphmind/session/start",
+            url=f"{REST_URL}/graphmind/session/end",
             method="POST",
             headers=auth_headers(),
             body={
                 "session_id": session_id,
-                "project": project,
-                "cwd": project,
             },
             timeout=5,
         )
 
-        if is_ok(res):
-            result = res.get("json") or {}
-            context = result.get("context")
-
-            if context:
-                sys.stdout.write(context)
-
-        else:
+        if not is_ok(res):
             log({
-                "error": "session start failed",
+                "error": "session end failed",
                 "status": res.get("status"),
                 "details": res.get("error"),
             })
 
     except Exception as err:
-        log(f"[graphmind] Claude bridge sync failed: {err}")
+        log(f"[graphmind] API call failed: {err}")
+
+    # Optional bridge trigger
+    if os.getenv("CLAUDE_MEMORY_BRIDGE"):
+        try:
+            res = fetch(
+                url=f"{REST_URL}/graphmind/session/end",
+                method="POST",
+                headers=auth_headers(),
+                body={
+                    "session_id": session_id,
+                    "bridge": True,  # differentiate call
+                },
+                timeout=5,
+            )
+
+            if not is_ok(res):
+                log({
+                    "error": "bridge call failed",
+                    "status": res.get("status"),
+                })
+
+        except Exception as err:
+            log(f"[graphmind] Bridge call failed: {err}")
 
 
 if __name__ == "__main__":

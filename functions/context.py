@@ -2,26 +2,27 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
 from iii import IIIClient
+from pydantic import BaseModel
 
 from schema import ContextBlock, ProjectProfile, Session
 from state.kv import StateKV
 from state.schema import KV
 
 
-@dataclass
-class ContextResponse:
+class ContextResult(BaseModel):
     context: str
 
 
-@dataclass
-class ContextHandlerParams:
+class ContextHandlerParams(BaseModel):
     session_id: str
     project: str
     budget: Optional[int] = None
 
 
 def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) -> None:
-    async def handle_context(data: ContextHandlerParams):
+    async def handle_context(data_raw: ContextHandlerParams):
+        data = ContextHandlerParams(**data_raw)
+
         budget = data.budget if data.budget is not None else token_budget
         blocks: List[ContextBlock] = []
         print(f"received: {data}")
@@ -32,7 +33,8 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
 
         # TODO: This needs more rethinking as it is getting all the sessions from cache than getting project specific sessions
         raw_sessions = await kv.list(KV.sessions)
-        all_sessions: List[Session] = [Session.model_validate(s) for s in raw_sessions] if raw_sessions else []
+        all_sessions: List[Session] = [Session.model_validate(
+            s) for s in raw_sessions] if raw_sessions else []
         print(f"[graphmind] found sessions: {all_sessions}")
 
         sessions = sorted(
@@ -45,7 +47,7 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
         )[:10]
 
         print(f"[graphmind] filtered sessions: {sessions}")
-
-        return ContextResponse(context="12345")
+        # TODO: Pending impl
+        return ContextResult(context="hello")
 
     sdk.register_function({"id": "mem::context"}, handle_context)

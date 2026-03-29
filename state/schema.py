@@ -1,5 +1,7 @@
 class KV:
     sessions = "mem:sessions"
+    profiles = "mem:profiles"
+    memories = "mem:memories",
 
     @staticmethod
     def observations(session_id: str) -> str:

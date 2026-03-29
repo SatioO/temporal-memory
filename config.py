@@ -1,8 +1,10 @@
 import os
+import re
 from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
-from schema import AgentMemoryConfig, EmbeddingConfig, FallbackConfig, ProviderConfig, TeamConfig
+from schema import AgentMemoryConfig, CloudBridgeConfig, EmbeddingConfig, FallbackConfig, ProviderConfig, TeamConfig
 
 
 DATA_DIR = os.path.join(os.path.expanduser("~"), ".graphmind")
@@ -179,4 +181,31 @@ def load_team_config() -> Optional[TeamConfig]:
         team_id=team_id,
         user_id=user_id,
         mode="shared" if mode == "shared" else "private"
+    )
+
+
+def load_claude_bridge_config() -> CloudBridgeConfig:
+    enabled = os.getenv("CLAUDE_MEMORY_BRIDGE") is not None
+    project_path = os.getenv("CLAUDE_PROJECT_PATH")
+    line_budget = safe_int(os.getenv("CLAUDE_MEMORY_LINE_BUDGET"), 200)
+
+    memory_file_path = ""
+
+    if enabled and project_path is not None:
+        safe_path = re.sub(r"[/\\]", "-", project_path)
+        safe_path = re.sub(r"^-", "", safe_path)
+        memory_file_path = (
+            Path.home()
+            / ".claude"
+            / "projects"
+            / safe_path
+            / "memory"
+            / "MEMORY.md"
+        )
+
+    return CloudBridgeConfig(
+        enabled,
+        project_path,
+        memory_file_path,
+        line_budget
     )

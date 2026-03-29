@@ -3,7 +3,7 @@ from typing import Optional, Union
 from iii import ApiRequest, IIIClient, RegisterFunctionInput, RegisterTriggerInput, Logger, ApiResponse, TriggerRequest
 from pydantic import BaseModel
 
-from functions.context import ContextHandlerParams
+from functions.context import ContextHandlerParams, ContextResult
 from schema import Session, SessionStatus
 from providers.resilient import ResilientProvider
 from state.kv import StateKV
@@ -19,6 +19,7 @@ class SessionStartPayload(BaseModel):
 
 class SessionStartResponse(BaseModel):
     session: Session
+    context: str
 
 
 class SessionEndPayload(BaseModel):
@@ -35,11 +36,15 @@ def register_api_triggers(
     secret: Optional[str] = None,
     provider: Optional[Union[ResilientProvider, dict]] = None
 ):
-    async def handle_session_start(req: ApiRequest[SessionStartPayload]) -> ApiResponse[SessionStartResponse]:
+    async def handle_session_start(req_raw: ApiRequest[SessionStartPayload]) -> ApiResponse[SessionStartResponse]:
         logger = Logger()
 
-        parsed_req = ApiRequest[SessionStartPayload](**req)
-        payload = SessionStartPayload(**parsed_req.body)
+        req = ApiRequest(**req_raw)
+        if not req.body:
+            raise ValueError("Request body missing")
+
+        payload = SessionStartPayload(**req.body)
+        print(f"[graphmind] Created Payload: {payload.session_id}")
 
         session = Session(
             id=payload.session_id,
@@ -54,7 +59,7 @@ def register_api_triggers(
         await kv.set(KV.sessions, payload.session_id, session.model_dump())
         logger.debug(f"[graphmind] Created session: {payload.session_id}")
 
-        context_response = await sdk.trigger_async(
+        context_result = await sdk.trigger_async(
             TriggerRequest(
                 function_id="mem::context",
                 payload=ContextHandlerParams(
@@ -64,22 +69,33 @@ def register_api_triggers(
             )
         )
 
-        print(context_response)
-
-        # parsed = ContextResponse(**context_response)
+        parsed_context = ContextResult(**context_result)
 
         return ApiResponse(
             statusCode=200,
-            body=SessionStartResponse(session=session).model_dump(),
+            body=SessionStartResponse(
+                session=session,
+                context=parsed_context.context
+            ).model_dump(),
         )
 
-    async def handle_session_end(req: ApiRequest[SessionEndPayload]) -> ApiResponse[SessionEndResponse]:
-        parsed_req = ApiRequest[SessionEndPayload](**req)
-        body = SessionEndPayload(**parsed_req.body)
+    async def handle_session_end(req_raw: ApiRequest[SessionEndPayload]) -> ApiResponse[SessionEndResponse]:
+        logger = Logger()
 
-        raw = await kv.get(KV.sessions, body.session_id)
+        req = ApiRequest(**req_raw)
+        if not req.body:
+            raise ValueError("Request body missing")
+
+        payload = SessionEndPayload(**req.body)
+        print(f"[graphmind] Created Payload: {payload.session_id}")
+
+        raw = await kv.get(KV.sessions, payload.session_id)
+
         if raw is None:
-            return ApiResponse(statusCode=404, body={"success": False})
+            return ApiResponse(
+                statusCode=404,
+                body=SessionEndResponse(success=False).model_dump()
+            )
 
         session = Session.model_validate(raw)
         modified_session = session.model_copy(update={
@@ -87,9 +103,12 @@ def register_api_triggers(
             "status": SessionStatus.COMPLETED
         })
 
-        await kv.set(KV.sessions, body.session_id, modified_session.model_dump())
+        await kv.set(KV.sessions, payload.session_id, modified_session.model_dump())
 
-        return ApiResponse(statusCode=200, body={"success": True})
+        return ApiResponse(
+            statusCode=200,
+            body=SessionEndResponse(success=True).model_dump()
+        )
 
     sdk.register_function(
         RegisterFunctionInput(id="api::session::start"),

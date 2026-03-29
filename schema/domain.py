@@ -5,6 +5,14 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel
 
 
+class MemoryType(str, Enum):
+    PATTERN = "pattern"
+    PREFERENCE = "preference"
+    ARCHITECTURE = "architecture"
+    BUG = "bug"
+    WORKFLOW = "workflow"
+
+
 class SessionStatus(str, Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
@@ -27,6 +35,32 @@ class Session(BaseModel):
     observation_count: int = 0
     model: Optional[str] = None
     tags: Optional[str] = None
+
+
+class Memory(BaseModel):
+    id: str
+    created_at: str
+    updated_at: str
+
+    type: MemoryType
+
+    title: str
+    content: str
+
+    concepts: List[str]
+    files: List[str]
+    session_ids: List[str]
+
+    strength: float
+    version: int
+
+    parent_id: Optional[str] = None
+    supersedes: Optional[List[str]] = None
+    related_ids: Optional[List[str]] = None
+    source_observation_ids: Optional[List[str]] = None
+
+    is_latest: bool
+    forget_after: Optional[str] = None
 
 
 class ProjectTopConcepts(BaseModel):
