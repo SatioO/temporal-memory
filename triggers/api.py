@@ -1,5 +1,6 @@
+import asyncio
 from datetime import datetime, timezone
-from typing import Any, Optional, Union
+from typing import Optional, Union
 from iii import ApiRequest, IIIClient, RegisterFunctionInput, RegisterTriggerInput, Logger, ApiResponse, TriggerRequest
 from pydantic import BaseModel
 
@@ -36,11 +37,6 @@ class SummarizePayload(BaseModel):
     session_id: str
 
 
-class Response(BaseModel):
-    status_code: int
-    body: Any
-
-
 def register_api_triggers(
     sdk: IIIClient,
     kv: StateKV,
@@ -48,8 +44,9 @@ def register_api_triggers(
     secret: Optional[str] = None,
     provider: Optional[Union[ResilientProvider, dict]] = None
 ):
+    logger = Logger()
 
-    async def handle_observe(req_raw: ApiRequest[HookPayload]) -> Response:
+    async def handle_observe(req_raw: ApiRequest[HookPayload]) -> ApiResponse:
         req = ApiRequest(**req_raw)
         payload = HookPayload(**req.body)
 
@@ -58,10 +55,9 @@ def register_api_triggers(
                 function_id="mem::observe",
                 payload=payload
             ))
-
-            return Response(status_code=201, body=result).model_dump_json()
+            return ApiResponse(statusCode=201, body=result)
         except Exception as err:
-            return Response(status_code=500, body=ClaudeBridgeSyncResult(success=False, error=str(err))).model_dump_json()
+            return ApiResponse(statusCode=500, body={"success": False, "error": str(err)})
 
     async def handle_summarize(req_raw: ApiRequest[SummarizePayload]) -> ApiResponse:
         req = ApiRequest(**req_raw)
@@ -72,10 +68,9 @@ def register_api_triggers(
                 function_id="mem::summarize",
                 payload=payload
             ))
-
-            return Response(status_code=200, body=result)
+            return ApiResponse(statusCode=200, body=result)
         except Exception as err:
-            return Response(status_code=500, body=ClaudeBridgeSyncResult(success=False, error=str(err)))
+            return ApiResponse(statusCode=500, body={"success": False, "error": str(err)})
 
     async def handle_claude_bridge_sync(req_raw: ApiRequest) -> ApiResponse[ClaudeBridgeSyncResult]:
         try:
@@ -83,14 +78,11 @@ def register_api_triggers(
                 function_id="mem::claude-bridge::sync",
                 payload={}
             ))
-
             return ApiResponse(statusCode=200, body=result)
         except Exception as err:
             return ApiResponse(statusCode=500, body=ClaudeBridgeSyncResult(success=False, error=str(err)))
 
     async def handle_session_start(req_raw: ApiRequest[SessionStartPayload]) -> ApiResponse[SessionStartResponse]:
-        logger = Logger()
-
         req = ApiRequest(**req_raw)
         payload = SessionStartPayload(**req.body)
 
@@ -104,20 +96,19 @@ def register_api_triggers(
             observation_count=0
         )
 
-        await kv.set(KV.sessions, payload.session_id, session.model_dump())
-        logger.debug(f"[graphmind] Created session: {payload.session_id}")
-
-        context_result = await sdk.trigger_async(
-            TriggerRequest(
+        _, context_result_raw = await asyncio.gather(
+            kv.set(KV.sessions, payload.session_id, session.model_dump()),
+            sdk.trigger_async(TriggerRequest(
                 function_id="mem::context",
                 payload=ContextHandlerParams(
                     session_id=payload.session_id,
                     project=payload.project
                 )
-            )
+            ))
         )
 
-        parsed_context = ContextResult(**context_result)
+        logger.debug(f"[graphmind] Created session: {payload.session_id}")
+        parsed_context = ContextResult(**context_result_raw)
 
         return ApiResponse(
             statusCode=200,
@@ -128,11 +119,8 @@ def register_api_triggers(
         )
 
     async def handle_session_end(req_raw: ApiRequest[SessionEndPayload]) -> ApiResponse[SessionEndResponse]:
-        logger = Logger()
-
         req = ApiRequest(**req_raw)
         payload = SessionEndPayload(**req.body)
-        print(f"[graphmind] Created Payload: {payload.session_id}")
 
         raw = await kv.get(KV.sessions, payload.session_id)
 
@@ -149,6 +137,7 @@ def register_api_triggers(
         })
 
         await kv.set(KV.sessions, payload.session_id, modified_session.model_dump())
+        logger.debug(f"[graphmind] Ended session: {payload.session_id}")
 
         return ApiResponse(
             statusCode=200,
