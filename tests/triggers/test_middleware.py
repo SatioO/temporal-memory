@@ -39,7 +39,10 @@ async def test_auth_middleware_rejects_wrong_key():
 # --- Logging middleware ---
 
 @pytest.mark.asyncio
-async def test_logging_middleware_passes_through(capfd):
+async def test_logging_middleware_passes_through(caplog):
+    import logging
     req = Request(body={})
-    response = await logging_middleware(req, ok_handler)
+    with caplog.at_level(logging.DEBUG, logger="graphmind"):
+        response = await logging_middleware(req, ok_handler)
     assert response.status_code == 200
+    assert len(caplog.records) == 2
