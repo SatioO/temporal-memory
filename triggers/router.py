@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable, Generic, Optional, TypeVar
 from pydantic import BaseModel
 
 T = TypeVar("T")
-U = TypeVar("U")
 
 
 # --- HTTP types ---
@@ -100,9 +98,9 @@ class RouteConfig:
 
 
 class ApiRouter:
-    def __init__(self, prefix: str, middleware: list[Middleware] = []):
+    def __init__(self, prefix: str, middleware: list[Middleware] | None = None):
+        self.middleware = middleware if middleware is not None else []
         self.prefix = prefix
-        self.middleware = middleware
         self.routes: list[RouteConfig] = []
 
     def post(self, path: str, function_id: str, payload_type: Optional[type[BaseModel]]):
