@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from datetime import datetime, timezone
 import os
 import sys
 import json
@@ -97,43 +98,33 @@ def is_ok(res):
 
 
 def main() -> None:
-    log("[graphmind] SessionEnd hook triggered ✓")
+    log("[graphmind] PostToolUse hook triggered ✓")
 
     data = read_json_stdin() or {}
     session_id = data.get("session_id") or "unknown"
+    project = data.get("cwd") or os.getcwd()
+
+    print(f"[graphmind] PostToolUse data: {data}")
 
     try:
-        res = fetch(
-            url=f"{REST_URL}/graphmind/session/end",
+        fetch(
+            url=f"{REST_URL}/graphmind/observe",
             method="POST",
             headers=auth_headers(),
             body={
+                "hook_type": "post_tool_use",
                 "session_id": session_id,
+                "project": project,
+                "cwd": project,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": {
+                    "tool_name": data.get("tool_name"),
+                    "tool_input": data.get("tool_input"),
+                    "tool_response": data.get("tool_response")
+                }
             },
             timeout=5,
         )
-
-        if not is_ok(res):
-            log({
-                "error": "session end failed",
-                "status": res.get("status"),
-                "details": res.get("error"),
-            })
-        log("[graphmind] ClaudeBridge Sync hook triggered ✓")
-
-        res = fetch(
-            url=f"{REST_URL}/graphmind/claude-bridge/sync",
-            method="POST",
-            headers=auth_headers(),
-            body={},
-            timeout=5,
-        )
-
-        if not is_ok(res):
-            log({
-                "error": "bridge call failed",
-                "status": res.get("status"),
-            })
 
     except Exception as err:
         log(f"[graphmind] API call failed: {err}")

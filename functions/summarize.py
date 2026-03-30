@@ -3,7 +3,6 @@ from iii import IIIClient
 from pydantic import BaseModel
 
 from prompts.summary import SUMMARY_SYSTEM_PROMPT, build_summary_prompt
-from schema.config import ProviderConfig
 from schema.domain import CompressedObservation, MemoryProvider
 from state.kv import StateKV
 from state.schema import KV
@@ -43,7 +42,6 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
             prompt = build_summary_prompt(compressed)
             response = provider.summarize(SUMMARY_SYSTEM_PROMPT, prompt)
             print(response)
-
 
         # TODO: write next logic
         except:

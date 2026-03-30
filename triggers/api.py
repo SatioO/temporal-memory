@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Optional, Union
+from typing import Any, Optional, Union
 from iii import ApiRequest, IIIClient, RegisterFunctionInput, RegisterTriggerInput, Logger, ApiResponse, TriggerRequest
 from pydantic import BaseModel
 
@@ -7,6 +7,7 @@ from functions.claude_bridge import ClaudeBridgeSyncResult
 from functions.context import ContextHandlerParams, ContextResult
 from schema import Session, SessionStatus
 from providers.resilient import ResilientProvider
+from schema.domain import HookPayload
 from state.kv import StateKV
 from state.schema import KV
 
@@ -35,6 +36,11 @@ class SummarizePayload(BaseModel):
     session_id: str
 
 
+class Response(BaseModel):
+    status_code: int
+    body: Any
+
+
 def register_api_triggers(
     sdk: IIIClient,
     kv: StateKV,
@@ -42,26 +48,34 @@ def register_api_triggers(
     secret: Optional[str] = None,
     provider: Optional[Union[ResilientProvider, dict]] = None
 ):
+
+    async def handle_observe(req_raw: ApiRequest[HookPayload]) -> Response:
+        req = ApiRequest(**req_raw)
+        payload = HookPayload(**req.body)
+
+        try:
+            result = await sdk.trigger_async(TriggerRequest(
+                function_id="mem::observe",
+                payload=payload
+            ))
+
+            return Response(status_code=201, body=result).model_dump_json()
+        except Exception as err:
+            return Response(status_code=500, body=ClaudeBridgeSyncResult(success=False, error=str(err))).model_dump_json()
+
     async def handle_summarize(req_raw: ApiRequest[SummarizePayload]) -> ApiResponse:
         req = ApiRequest(**req_raw)
-        if not req.body:
-            raise ValueError("Request body missing")
-
         payload = SummarizePayload(**req.body)
 
         try:
             result = await sdk.trigger_async(TriggerRequest(
                 function_id="mem::summarize",
-                payload={
-                    "session_id": payload.session_id
-                }
+                payload=payload
             ))
 
-            print(result)
-
-            return ApiResponse(statusCode=200, body=result)
+            return Response(status_code=200, body=result)
         except Exception as err:
-            return ApiResponse(statusCode=500, body=ClaudeBridgeSyncResult(success=False, error=str(err)))
+            return Response(status_code=500, body=ClaudeBridgeSyncResult(success=False, error=str(err)))
 
     async def handle_claude_bridge_sync(req_raw: ApiRequest) -> ApiResponse[ClaudeBridgeSyncResult]:
         try:
@@ -78,9 +92,6 @@ def register_api_triggers(
         logger = Logger()
 
         req = ApiRequest(**req_raw)
-        if not req.body:
-            raise ValueError("Request body missing")
-
         payload = SessionStartPayload(**req.body)
 
         session = Session(
@@ -120,9 +131,6 @@ def register_api_triggers(
         logger = Logger()
 
         req = ApiRequest(**req_raw)
-        if not req.body:
-            raise ValueError("Request body missing")
-
         payload = SessionEndPayload(**req.body)
         print(f"[graphmind] Created Payload: {payload.session_id}")
 
@@ -206,6 +214,22 @@ def register_api_triggers(
             function_id="api::summarize",
             config={
                 "api_path": "graphmind/summarize",
+                "http_method": "POST"
+            }
+        )
+    )
+
+    sdk.register_function(
+        RegisterFunctionInput(id="api::observe"),
+        handle_observe,
+    )
+
+    sdk.register_trigger(
+        RegisterTriggerInput(
+            type="http",
+            function_id="api::observe",
+            config={
+                "api_path": "graphmind/observe",
                 "http_method": "POST"
             }
         )

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -40,6 +40,30 @@ class CircuitBreakerState(str, Enum):
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half-open"
+
+
+class HookType(str, Enum):
+    SESSION_START = "session_start"
+    PROMPT_SUBMIT = "prompt_submit"
+    PRE_TOOL_USE = "pre_tool_use"
+    POST_TOOL_USE = "post_tool_use"
+    POST_TOOL_FAILURE = "post_tool_failure"
+    PRE_COMPACT = "pre_compact"
+    SUBAGENT_START = "subagent_start"
+    SUBAGENT_STOP = "subagent_stop"
+    NOTIFICATION = "notification"
+    TASK_COMPLETED = "task_completed"
+    STOP = "stop"
+    SESSION_END = "session_end"
+
+
+class HookPayload(BaseModel):
+    hook_type: HookType
+    session_id: str
+    project: str
+    cwd: str
+    timestamp: str
+    data: Any
 
 
 class CompressedObservation(BaseModel):

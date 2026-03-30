@@ -6,8 +6,8 @@ import urllib.request
 import urllib.error
 from typing import Any, Dict, Optional
 
-REST_URL = os.getenv("AGENTMEMORY_URL") or "http://localhost:3111"
-SECRET = os.getenv("AGENTMEMORY_SECRET") or ""
+REST_URL = os.getenv("GRAPHMIND_URL") or "http://localhost:3111"
+SECRET = os.getenv("GRAPHMIND_SECRET") or ""
 
 
 def fetch(
