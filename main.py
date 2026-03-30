@@ -5,6 +5,7 @@ from iii import register_worker, InitOptions
 from config import load_claude_bridge_config, load_config, load_embedding_config, load_fallback_config, load_team_config
 from functions.claude_bridge import register_claude_bridge_function
 from functions.context import register_context_function
+from functions.summarize import register_summarize_function
 from functions.team import register_team_function
 from providers.embedding import create_embedding_provider
 from providers import create_fallback_provider, create_provider
@@ -46,6 +47,7 @@ def main():
     kv = StateKV(sdk=sdk)
 
     register_context_function(sdk, kv, config.token_budget)
+    register_summarize_function(sdk, kv, provider)
 
     team_config = load_team_config()
     if team_config:

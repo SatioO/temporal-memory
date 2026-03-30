@@ -185,7 +185,7 @@ def load_team_config() -> Optional[TeamConfig]:
 
 
 def load_claude_bridge_config() -> CloudBridgeConfig:
-    enabled = os.getenv("CLAUDE_MEMORY_BRIDGE") is not None
+    enabled = os.getenv("CLAUDE_MEMORY_BRIDGE", "false").lower() == "true"
     project_path = os.getenv("CLAUDE_PROJECT_PATH")
     line_budget = safe_int(os.getenv("CLAUDE_MEMORY_LINE_BUDGET"), 200)
 
@@ -204,8 +204,8 @@ def load_claude_bridge_config() -> CloudBridgeConfig:
         )
 
     return CloudBridgeConfig(
-        enabled,
-        project_path,
-        memory_file_path,
-        line_budget
+        enabled=enabled,
+        memory_file_path=memory_file_path,
+        line_budget=line_budget,
+        project_path=project_path
     )

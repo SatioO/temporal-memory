@@ -20,5 +20,5 @@ class StateKV:
     async def get_group(self, scope: str) -> list[T]:
         return await self.sdk.trigger_async(TriggerRequest(function_id="state::list", payload={"scope": scope}))
 
-    async def list(self, scope: str) -> List[T]:
+    async def list(self, scope: str) -> list[T]:
         return await self.sdk.trigger_async(TriggerRequest(function_id='state::list', payload={"scope": scope}))

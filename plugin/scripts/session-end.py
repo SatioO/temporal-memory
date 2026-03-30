@@ -97,7 +97,7 @@ def is_ok(res):
 
 
 def main() -> None:
-    log("[graphmind] SessionStart hook triggered ✓")
+    log("[graphmind] SessionEnd hook triggered ✓")
 
     data = read_json_stdin() or {}
     session_id = data.get("session_id") or "unknown"
@@ -119,32 +119,24 @@ def main() -> None:
                 "status": res.get("status"),
                 "details": res.get("error"),
             })
+        log("[graphmind] ClaudeBridge Sync hook triggered ✓")
+
+        res = fetch(
+            url=f"{REST_URL}/graphmind/claude-bridge/sync",
+            method="POST",
+            headers=auth_headers(),
+            body={},
+            timeout=5,
+        )
+
+        if not is_ok(res):
+            log({
+                "error": "bridge call failed",
+                "status": res.get("status"),
+            })
 
     except Exception as err:
         log(f"[graphmind] API call failed: {err}")
-
-    # Optional bridge trigger
-    if os.getenv("CLAUDE_MEMORY_BRIDGE"):
-        try:
-            res = fetch(
-                url=f"{REST_URL}/graphmind/session/end",
-                method="POST",
-                headers=auth_headers(),
-                body={
-                    "session_id": session_id,
-                    "bridge": True,  # differentiate call
-                },
-                timeout=5,
-            )
-
-            if not is_ok(res):
-                log({
-                    "error": "bridge call failed",
-                    "status": res.get("status"),
-                })
-
-        except Exception as err:
-            log(f"[graphmind] Bridge call failed: {err}")
 
 
 if __name__ == "__main__":

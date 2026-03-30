@@ -3,6 +3,7 @@ from typing import Optional, Union
 from iii import ApiRequest, IIIClient, RegisterFunctionInput, RegisterTriggerInput, Logger, ApiResponse, TriggerRequest
 from pydantic import BaseModel
 
+from functions.claude_bridge import ClaudeBridgeSyncResult
 from functions.context import ContextHandlerParams, ContextResult
 from schema import Session, SessionStatus
 from providers.resilient import ResilientProvider
@@ -30,12 +31,49 @@ class SessionEndResponse(BaseModel):
     success: bool
 
 
+class SummarizePayload(BaseModel):
+    session_id: str
+
+
 def register_api_triggers(
     sdk: IIIClient,
     kv: StateKV,
+    # TODO: handle authentication for requests
     secret: Optional[str] = None,
     provider: Optional[Union[ResilientProvider, dict]] = None
 ):
+    async def handle_summarize(req_raw: ApiRequest[SummarizePayload]) -> ApiResponse:
+        req = ApiRequest(**req_raw)
+        if not req.body:
+            raise ValueError("Request body missing")
+
+        payload = SummarizePayload(**req.body)
+
+        try:
+            result = await sdk.trigger_async(TriggerRequest(
+                function_id="mem::summarize",
+                payload={
+                    "session_id": payload.session_id
+                }
+            ))
+
+            print(result)
+
+            return ApiResponse(statusCode=200, body=result)
+        except Exception as err:
+            return ApiResponse(statusCode=500, body=ClaudeBridgeSyncResult(success=False, error=str(err)))
+
+    async def handle_claude_bridge_sync(req_raw: ApiRequest) -> ApiResponse[ClaudeBridgeSyncResult]:
+        try:
+            result = await sdk.trigger_async(TriggerRequest(
+                function_id="mem::claude-bridge::sync",
+                payload={}
+            ))
+
+            return ApiResponse(statusCode=200, body=result)
+        except Exception as err:
+            return ApiResponse(statusCode=500, body=ClaudeBridgeSyncResult(success=False, error=str(err)))
+
     async def handle_session_start(req_raw: ApiRequest[SessionStartPayload]) -> ApiResponse[SessionStartResponse]:
         logger = Logger()
 
@@ -44,7 +82,6 @@ def register_api_triggers(
             raise ValueError("Request body missing")
 
         payload = SessionStartPayload(**req.body)
-        print(f"[graphmind] Created Payload: {payload.session_id}")
 
         session = Session(
             id=payload.session_id,
@@ -137,6 +174,38 @@ def register_api_triggers(
             function_id="api::session::end",
             config={
                 "api_path": "graphmind/session/end",
+                "http_method": "POST"
+            }
+        )
+    )
+
+    sdk.register_function(
+        RegisterFunctionInput(id="api::claude-bridge::sync"),
+        handle_claude_bridge_sync,
+    )
+
+    sdk.register_trigger(
+        RegisterTriggerInput(
+            type="http",
+            function_id="api::claude-bridge::sync",
+            config={
+                "api_path": "graphmind/claude-bridge/sync",
+                "http_method": "POST"
+            }
+        )
+    )
+
+    sdk.register_function(
+        RegisterFunctionInput(id="api::summarize"),
+        handle_summarize,
+    )
+
+    sdk.register_trigger(
+        RegisterTriggerInput(
+            type="http",
+            function_id="api::summarize",
+            config={
+                "api_path": "graphmind/summarize",
                 "http_method": "POST"
             }
         )

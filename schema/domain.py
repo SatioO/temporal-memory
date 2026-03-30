@@ -5,6 +5,23 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel
 
 
+class ObservationType(str, Enum):
+    FILE_READ = "file_read"
+    FILE_WRITE = "file_write"
+    FILE_EDIT = "file_edit"
+    COMMAND_RUN = "command_run"
+    SEARCH = "search"
+    WEB_FETCH = "web_fetch"
+    CONVERSATION = "conversation"
+    ERROR = "error"
+    DECISION = "decision"
+    DISCOVERY = "discovery"
+    SUBAGENT = "subagent"
+    NOTIFICATION = "notification"
+    TASK = "task"
+    OTHER = "other"
+
+
 class MemoryType(str, Enum):
     PATTERN = "pattern"
     PREFERENCE = "preference"
@@ -23,6 +40,21 @@ class CircuitBreakerState(str, Enum):
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half-open"
+
+
+class CompressedObservation(BaseModel):
+    id: str
+    session_id: str
+    timestamp: str
+    type: ObservationType
+    title: str
+    subtitle: Optional[str]
+    facts: list[str]
+    narrative: str
+    concepts: list[str]
+    files: list[str]
+    importance: int
+    confidence: Optional[float]
 
 
 class Session(BaseModel):

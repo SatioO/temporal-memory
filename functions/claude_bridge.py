@@ -1,6 +1,7 @@
 import os
-from dataclasses import dataclass
+from typing import Optional
 from iii import IIIClient
+from pydantic import BaseModel
 
 from schema import CloudBridgeConfig
 from schema.domain import Memory
@@ -8,17 +9,16 @@ from state.kv import StateKV
 from state.schema import KV
 
 
-@dataclass
-class ClaudeBridgeSyncError:
+class ClaudeBridgeSyncError(BaseModel):
     success: bool
     error: str
 
 
-@dataclass
-class ClaudeBridgeSyncSuccess:
+class ClaudeBridgeSyncResult(BaseModel):
     success: bool
-    path: str
-    lines: str
+    path: Optional[str] = None
+    lines: Optional[int] = None
+    error: Optional[str] = None
 
 
 def serialize_to_memory_md(memories: list[Memory], project_summary: str, line_budget: str) -> str:
@@ -58,18 +58,20 @@ def serialize_to_memory_md(memories: list[Memory], project_summary: str, line_bu
 
 
 def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBridgeConfig):
-    async def handle_claude_bridge_sync():
+    async def handle_claude_bridge_sync(data_raw: dict):
+        print(
+            f"[graphmind] handle_claude_bridge_sync triggered")
         if not config.enabled or config.memory_file_path is None:
             return ClaudeBridgeSyncError(success=False, error="Claude bridge not configured")
 
         try:
-            memories: list[Memory] = await kv.list(KV.memories)
+            raw_memories = await kv.get_group(KV.memories)
             latest_memories = [
-                memory for memory in memories if memory.is_latest]
+                memory for memory in raw_memories if memory.is_latest]
 
             # TODO: visit later to understand more
             project_summary = ""
-            if config.project_path is not None:
+            if config.project_path:
                 profile = await kv.get(KV.profiles, config.project_path)
                 project_summary = profile["summary"] if profile is not None else ""
 
@@ -88,16 +90,16 @@ def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBr
             print(
                 f"Claude bridge: synced to MEMORY.md \n path: {config.memory_file_path} \n memories: {len(latest_memories)}")
 
-            return ClaudeBridgeSyncSuccess(
+            return ClaudeBridgeSyncResult(
                 success=True,
-                path=config.memory_file_path,
+                path=str(config.memory_file_path),
                 lines=len(md.split("\n"))
             )
 
         except Exception as err:
-            return ClaudeBridgeSyncError(success=False, error=str(err))
+            return ClaudeBridgeSyncResult(success=False, error=str(err))
 
     sdk.register_function(
-        {"id": "mem::claude-bridge-sync"},
+        {"id": "mem::claude-bridge::sync"},
         handle_claude_bridge_sync
     )
