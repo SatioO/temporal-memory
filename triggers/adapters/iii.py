@@ -1,3 +1,5 @@
+from typing import Any, Callable
+
 try:
     from iii import IIIClient, RegisterFunctionInput, RegisterTriggerInput
 except ModuleNotFoundError:
@@ -17,12 +19,12 @@ except ModuleNotFoundError:
 from triggers.adapters.base import AbstractAdapter
 from triggers.router import (
     ApiError, ApiException, ApiRouter, ErrorCode,
-    Request, build_middleware_chain,
+    Middleware, Request, RouteConfig, build_middleware_chain,
 )
 
 
 class IIIAdapter(AbstractAdapter):
-    def register(self, sdk, routers: list[ApiRouter]) -> None:
+    def register(self, sdk: Any, routers: list[ApiRouter]) -> None:
         for router in routers:
             for route in router.routes:
                 wrapped = self._wrap(route, router.middleware)
@@ -36,7 +38,7 @@ class IIIAdapter(AbstractAdapter):
                     }
                 ))
 
-    def _wrap(self, route, middleware):
+    def _wrap(self, route: RouteConfig, middleware: list[Middleware]) -> Callable:
         chain = build_middleware_chain(middleware, route.handler)
 
         async def handler(req_raw: dict) -> dict:
