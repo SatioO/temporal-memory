@@ -1,5 +1,5 @@
 from schema.config import (
-    AgentMemoryConfig,
+    AppConfig,
     CloudBridgeConfig,
     EmbeddingConfig,
     FallbackConfig,
@@ -38,7 +38,7 @@ __all__ = [
     "Session",
     "SessionStatus",
     # config
-    "AgentMemoryConfig",
+    "AppConfig",
     "CloudBridgeConfig",
     "EmbeddingConfig",
     "FallbackConfig",
