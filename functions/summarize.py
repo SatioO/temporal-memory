@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from iii import IIIClient
+from logger import get_logger
+
+logger = get_logger("summarize")
 
 from prompts.summary import SUMMARY_SYSTEM_PROMPT, build_summary_prompt
 from schema.base import Model
@@ -28,7 +31,7 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
 
         session = kv.get(KV.sessions, data.session_id)
         if not session:
-            print(f"[graphmind] session not found. (session_id: {data.session_id})")
+            logger.warning("session not found (session_id: %s)", data.session_id)
             return SummarizationResult(success=False, error="session_not_found").to_dict()
 
         raw_observations = await kv.list(KV.observations(data.session_id))
@@ -39,13 +42,13 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
         ]
 
         if len(compressed) == 0:
-            print(f"[graphmind] No observations to summarize. (session_id: {data.session_id})")
+            logger.warning("no observations to summarize (session_id: %s)", data.session_id)
             return SummarizationResult(success=False, error="no_observations").to_dict()
 
         try:
             prompt = build_summary_prompt(compressed)
             response = provider.summarize(SUMMARY_SYSTEM_PROMPT, prompt)
-            print(response)
+            logger.debug("summarize response: %s", response)
 
         # TODO: write next logic
         except Exception:

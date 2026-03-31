@@ -1,22 +1,38 @@
-import json
-from typing import Optional
-from iii import IIIClient
-from functions.dedup import DedupMap
-from functions.privacy import strip_private_data
-from schema.domain import HookPayload
+from dataclasses import replace
+from state.schema import KV, generate_id
 from state.kv import StateKV
-from state.schema import generate_id
+from schema.domain import HookPayload, RawObservation, Session
+from schema import HookType
+from functions.privacy import strip_private_data
+from functions.dedup import DedupMap
+from iii import IIIClient
+from logger import get_logger
+import asyncio
+import json
+from typing import Any, Callable, Coroutine, Optional
+
+logger = get_logger("observe")
+
+_locks: dict[str, asyncio.Lock] = {}
 
 
-def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[DedupMap], max_obs_per_session: int):
-    async def handle_observe(payload: HookPayload):
-        print(f"[graphmind] handle_observe received: {payload}")
+async def with_keyed_lock(key: str, fn: Callable[[], Coroutine[Any, Any, Any]]):
+    if key not in _locks:
+        _locks[key] = asyncio.Lock()
+    async with _locks[key]:
+        return await fn()
+
+
+def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[DedupMap], max_observations_per_session: int):
+    async def handle_observe(raw_data: HookPayload):
+        payload: HookPayload = HookPayload.from_dict(raw_data)
+        # logger.debug("handle_observe received: %s", payload)
 
         if (
             not payload
-            or not isinstance(payload.get("session_id"), str)
-            or not isinstance(payload.get("hook_type"), str)
-            or not isinstance(payload.get("timestamp"), str)
+            or not isinstance(payload.session_id, str)
+            or not isinstance(payload.hook_type, str)
+            or not isinstance(payload.timestamp, str)
         ):
             return {
                 "success": False,
@@ -28,20 +44,12 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
         dedup_hash = None
 
         if dedup_map:
-            data = payload.get("data") if isinstance(
-                payload, dict) else getattr(payload, "data", None)
+            d = payload.data if isinstance(payload.data, dict) else {}
 
-            if isinstance(data, dict):
-                d = data
-            else:
-                d = {}
-
-            tool_name = d.get("tool_name") or payload.get("hook_type") if isinstance(
-                payload, dict) else getattr(payload, "hook_type")
+            tool_name = d.get("tool_name") or payload.hook_type
 
             dedup_hash = dedup_map.compute_hash(
-                payload.get("session_id") if isinstance(
-                    payload, dict) else getattr(payload, "session_id"),
+                payload.session_id,
                 tool_name,
                 d.get("tool_input"),
             )
@@ -49,15 +57,75 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
             if dedup_map.is_duplicate(dedup_hash):
                 return {
                     "deduplicated": True,
-                    "session_id": payload.get("session_id") if isinstance(payload, dict) else getattr(payload, "session_id"),
+                    "sessionId": payload.session_id,
                 }
 
             try:
-                sanitized_raw = str(payload.data)
-                sanitized = strip_private_data(sanitized_raw)
+                json_str = json.dumps(payload.data)
+                sanitized = strip_private_data(json_str)
                 sanitized_raw = json.loads(sanitized)
-            except:
-                pass
+            except Exception as e:
+                logger.warning("sanitize fallback: %s", e)
+                sanitized_raw = strip_private_data(str(payload.data))
+
+            d = sanitized_raw if isinstance(sanitized_raw, dict) else {}
+            hook_type_str = payload.hook_type
+
+            tool_name = None
+            tool_input = None
+            tool_response = None
+            user_prompt = None
+
+            if hook_type_str in (HookType.POST_TOOL_USE, HookType.POST_TOOL_FAILURE):
+                tool_name = d.get("tool_name")
+                tool_input = d.get("tool_input")
+                tool_response = d.get("tool_response") or d.get("error")
+
+            if hook_type_str == HookType.PROMPT_SUBMIT:
+                user_prompt = d.get("prompt")
+
+            raw = RawObservation(
+                id=obs_id,
+                session_id=payload.session_id,
+                timestamp=payload.timestamp,
+                hook_type=HookType(hook_type_str),
+                tool_name=tool_name,
+                tool_input=tool_input,
+                tool_response=tool_response,
+                user_prompt=user_prompt,
+                raw=None,  # TODO: kept this to none to avoid dumping lot of data to cache
+            )
+
+            async def handler():
+                if max_observations_per_session and max_observations_per_session > 0:
+                    existing = await kv.list(KV.observations(payload.session_id))
+                    if len(existing) >= max_observations_per_session:
+                        return {
+                            "success": False,
+                            "error": f"Session observation limit reached ({max_observations_per_session})",
+                        }
+
+                await kv.set(KV.observations(payload.session_id), obs_id, raw)
+
+                if dedup_map and dedup_hash:
+                    dedup_map.record(dedup_hash)
+
+                session_raw = await kv.get(KV.sessions, payload.session_id)
+                if session_raw:
+                    session: Session = Session.from_dict(session_raw)
+                    await kv.set(
+                        KV.sessions,
+                        payload.session_id,
+                        replace(
+                            session, observation_count=session.observation_count + 1)
+                    )
+
+                logger.debug("observation captured obs_id=%s session_id=%s hook=%s",
+                             obs_id, payload.session_id, payload.hook_type)
+
+                return {"observation_id": obs_id}
+
+            return await with_keyed_lock(f"obs:{payload.session_id}", handler)
 
     sdk.register_function({
         "id": "mem::observe",

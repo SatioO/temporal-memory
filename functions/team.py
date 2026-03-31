@@ -1,5 +1,8 @@
 from typing import Literal, TypedDict
 from iii import IIIClient
+from logger import get_logger
+
+logger = get_logger("team")
 from schema import TeamConfig
 from state.kv import StateKV
 
@@ -16,15 +19,15 @@ class TeamFeedPayload(TypedDict):
 
 
 async def handle_team_share(data: TeamSharePayload):
-    print(data)
+    logger.debug("team_share: %s", data)
 
 
 async def handle_team_profile():
-    print("team profile")
+    logger.debug("team_profile called")
 
 
 async def handle_team_feed(data: TeamFeedPayload):
-    print(data)
+    logger.debug("team_feed: %s", data)
 
 
 def register_team_function(sdk: IIIClient, kv: StateKV, team_config: TeamConfig):

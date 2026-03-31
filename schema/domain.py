@@ -69,6 +69,20 @@ class HookPayload(Model):
 
 
 @dataclass(frozen=True)
+class RawObservation(Model):
+    id: str
+    session_id: str
+    timestamp: str
+    hook_type: HookType
+    tool_name: Optional[str] = None
+    tool_input: Optional[Any] = None
+    tool_response: Optional[Any] = None
+    user_prompt: Optional[str] = None
+    assistant_response: Optional[str] = None
+    raw: Any = None
+
+
+@dataclass(frozen=True)
 class CompressedObservation(Model):
     id: str
     session_id: str

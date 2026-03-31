@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from iii import IIIClient
+from logger import get_logger
+
+logger = get_logger("claude_bridge")
 
 from schema import CloudBridgeConfig
 from schema.base import Model
@@ -63,7 +66,7 @@ def serialize_to_memory_md(memories: list[Memory], project_summary: str, line_bu
 
 def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBridgeConfig):
     async def handle_claude_bridge_sync(data_raw: dict):
-        print("[graphmind] handle_claude_bridge_sync triggered")
+        logger.debug("handle_claude_bridge_sync triggered")
         if not config.enabled or config.memory_file_path is None:
             return ClaudeBridgeSyncError(success=False, error="Claude bridge not configured").to_dict()
 
@@ -85,11 +88,7 @@ def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBr
             with open(config.memory_file_path, "w", encoding="utf-8") as f:
                 f.write(md)
 
-            print(
-                f"Claude bridge: synced to MEMORY.md \n"
-                f" path: {config.memory_file_path} \n"
-                f" memories: {len(memories)}"
-            )
+            logger.info("synced to MEMORY.md path=%s memories=%d", config.memory_file_path, len(memories))
 
             return ClaudeBridgeSyncResult(
                 success=True,

@@ -3,6 +3,9 @@ from datetime import datetime
 from typing import List, Optional
 
 from iii import IIIClient
+from logger import get_logger
+
+logger = get_logger("context")
 
 from schema import ContextBlock, ProjectProfile, Session
 from schema.base import Model
@@ -28,11 +31,11 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
 
         budget = data.budget if data.budget is not None else token_budget
         blocks: List[ContextBlock] = []
-        print(f"[graphmind] handle_context received: {data}")
+        logger.debug("handle_context received: %s", data)
 
         profile: ProjectProfile = await kv.get(KV.profiles, data.project)
         if profile is not None:
-            print(f"[graphmind] found profile: {profile}")
+            logger.debug("found profile: %s", profile)
 
         # TODO: This needs more rethinking — currently gets all sessions, not project-specific
         raw_sessions = await kv.list(KV.sessions)
