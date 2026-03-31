@@ -1,7 +1,9 @@
+import json
 from typing import Optional
 from iii import IIIClient
 
 from functions.dedup import DedupMap
+from functions.privacy import strip_private_data
 from schema.domain import HookPayload
 from state.kv import StateKV
 from state.schema import generate_id
@@ -50,6 +52,12 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
                     "deduplicated": True,
                     "session_id": payload.get("session_id") if isinstance(payload, dict) else getattr(payload, "session_id"),
                 }
+
+            try:
+                sanitized_raw = str(payload.data)
+                sanitized = strip_private_data(sanitized_raw)
+                sanitized_raw = json.loads(sanitized)
+            except:
 
     sdk.register_function({
         "id": "mem::observe",
