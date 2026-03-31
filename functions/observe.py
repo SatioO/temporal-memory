@@ -26,7 +26,6 @@ async def with_keyed_lock(key: str, fn: Callable[[], Coroutine[Any, Any, Any]]):
 def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[DedupMap], max_observations_per_session: int):
     async def handle_observe(raw_data: HookPayload):
         payload: HookPayload = HookPayload.from_dict(raw_data)
-        # logger.debug("handle_observe received: %s", payload)
 
         if (
             not payload
@@ -73,13 +72,13 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
 
             tool_name = None
             tool_input = None
-            tool_response = None
+            tool_output = None
             user_prompt = None
 
             if hook_type_str in (HookType.POST_TOOL_USE, HookType.POST_TOOL_FAILURE):
                 tool_name = d.get("tool_name")
                 tool_input = d.get("tool_input")
-                tool_response = d.get("tool_response") or d.get("error")
+                tool_output = d.get("tool_response") or d.get("error")
 
             if hook_type_str == HookType.PROMPT_SUBMIT:
                 user_prompt = d.get("prompt")
@@ -91,7 +90,7 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
                 hook_type=HookType(hook_type_str),
                 tool_name=tool_name,
                 tool_input=tool_input,
-                tool_response=tool_response,
+                tool_output=tool_output,
                 user_prompt=user_prompt,
                 raw=None,  # TODO: kept this to none to avoid dumping lot of data to cache
             )
@@ -119,6 +118,16 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
                         replace(
                             session, observation_count=session.observation_count + 1)
                     )
+
+                await sdk.trigger_async({
+                    "function_id": "mem::compress",
+                    "payload": {
+                        "observation_id": obs_id,
+                        "session_id": payload.session_id,
+                        "raw": raw,
+                    },
+                    "action": "void"
+                })
 
                 logger.debug("observation captured obs_id=%s session_id=%s hook=%s",
                              obs_id, payload.session_id, payload.hook_type)

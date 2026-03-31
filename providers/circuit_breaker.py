@@ -36,7 +36,7 @@ class CircuitBreaker:
 
     @property
     def failure_threshold(self) -> int:
-        return self.failure_threshold
+        return self._failure_threshold
 
     @property
     def failure_window_ms(self) -> int:
@@ -53,8 +53,8 @@ class CircuitBreaker:
 
         if self._state == CircuitBreakerState.OPEN:
             if (
-                self.opened_at is not None and
-                (time.time() * 1000 - self.opened_at) >= self.recovery_timeout_ms
+                self._opened_at is not None and
+                (time.time() * 1000 - self._opened_at) >= self.recovery_timeout_ms
             ):
                 self._state = CircuitBreakerState.HALF_OPEN
                 return True
@@ -68,28 +68,28 @@ class CircuitBreaker:
             self._state = CircuitBreakerState.CLOSED
             self._failures = 0
             self._last_failure_at = None
-            self._failure_window_ms = None
+            self._opened_at = None
 
     def record_failures(self) -> None:
         now = time.time() * 1000
 
         if self._state == CircuitBreakerState.HALF_OPEN:
             self._state = CircuitBreakerState.OPEN
-            self._opened_at = time.time()
+            self._opened_at = time.time() * 1000
             return
 
         if (
-            self.last_failure_at is not None and
-            (now - self.last_failure_at) > self.failure_window_ms
+            self._last_failure_at is not None and
+            (now - self._last_failure_at) > self._failure_window_ms
         ):
-            self.failures = 0
+            self._failures = 0
 
-        self.failures += 1
-        self.last_failure_at = now
+        self._failures += 1
+        self._last_failure_at = now
 
-        if self.failures >= self.failure_threshold:
+        if self._failures >= self._failure_threshold:
             self._state = CircuitBreakerState.OPEN
-            self.opened_at = now
+            self._opened_at = now
 
     def get_state(self) -> CircuitBreakerSnapshot:
         return CircuitBreakerSnapshot(

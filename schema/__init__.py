@@ -26,6 +26,7 @@ from schema.domain import (
     ProjectTopFiles,
     Session,
     SessionStatus,
+    RawObservation
 )
 
 __all__ = [
@@ -48,6 +49,7 @@ __all__ = [
     "ProjectTopFiles",
     "Session",
     "SessionStatus",
+    "RawObservation",
     # config
     "AppConfig",
     "CloudBridgeConfig",

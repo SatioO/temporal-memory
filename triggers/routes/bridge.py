@@ -22,6 +22,14 @@ def bridge_router(sdk: Any, middleware: list[Middleware] = None) -> ApiRouter:
         })
         return Response(status_code=201, body=result)
 
+    @router.post("compress", "api::compress", HookPayload)
+    async def handle_compress(req: Request[HookPayload]) -> Response:
+        result = await sdk.trigger_async({
+            "function_id": "mem::compress",
+            "payload": req.body.to_dict(),
+        })
+        return Response(status_code=201, body=result)
+
     @router.post("summarize", "api::summarize", SummarizePayload)
     async def handle_summarize(req: Request[SummarizePayload]) -> Response:
         result = await sdk.trigger_async({

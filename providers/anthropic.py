@@ -1,6 +1,9 @@
 from typing import Final
 from schema import MemoryProvider
 from anthropic import Anthropic
+from logger import get_logger
+
+logger = get_logger("context")
 
 
 class AnthropicProvider(MemoryProvider):
@@ -12,9 +15,11 @@ class AnthropicProvider(MemoryProvider):
         self.max_tokens = max_tokens
 
     async def compress(self, system_prompt: str, user_prompt: str) -> str:
+        logger.info("Anthropic provider in action: compress")
         return await self._call(system_prompt, user_prompt)
 
     async def summarize(self, system_prompt: str, user_prompt: str) -> str:
+        logger.info("Anthropic provider in action: summarize")
         return await self._call(system_prompt, user_prompt)
 
     async def _call(self, system_prompt: str, user_prompt: str):

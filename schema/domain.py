@@ -76,7 +76,7 @@ class RawObservation(Model):
     hook_type: HookType
     tool_name: Optional[str] = None
     tool_input: Optional[Any] = None
-    tool_response: Optional[Any] = None
+    tool_output: Optional[Any] = None
     user_prompt: Optional[str] = None
     assistant_response: Optional[str] = None
     raw: Any = None

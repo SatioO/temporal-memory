@@ -17,7 +17,7 @@ class ResilientProvider(MemoryProvider):
         return await self._call(lambda: self.inner.summarize(system_prompt, user_prompt))
 
     async def _call(self, fn: Callable[[], Awaitable[str]]) -> str:
-        if not self.circuit_breaker.is_allowed():
+        if not self.circuit_breaker.is_allowed:
             raise Exception("circuit_breaker_open")
 
         try:

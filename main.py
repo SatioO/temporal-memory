@@ -4,19 +4,20 @@ from iii import register_worker, InitOptions
 
 from config import config
 from logger import get_logger
-
-logger = get_logger("main")
-from functions.claude_bridge import register_claude_bridge_function
-from functions.context import register_context_function
-from functions.dedup import DedupMap
-from functions.observe import register_observe_function
-from functions.privacy import register_privacy_function
-from functions.summarize import register_summarize_function
-from functions.team import register_team_function
-from providers.embedding import create_embedding_provider
-from providers import create_fallback_provider, create_provider
 from state.kv import StateKV
 from triggers.api import register_api_triggers
+from providers import create_fallback_provider, create_provider
+from providers.embedding import create_embedding_provider
+from functions.team import register_team_function
+from functions.summarize import register_summarize_function
+from functions.privacy import register_privacy_function
+from functions.observe import register_observe_function
+from functions.dedup import DedupMap
+from functions.context import register_context_function
+from functions.claude_bridge import register_claude_bridge_function
+from functions.compress import register_compress_function
+
+logger = get_logger("main")
 
 
 def main():
@@ -36,7 +37,8 @@ def main():
     logger.info("streams:  ws://localhost:%s", config.streams_port)
 
     if embedding_provider:
-        logger.info("embedding: %s (%s dims)", embedding_provider.name, embedding_provider.dimensions)
+        logger.info("embedding: %s (%s dims)",
+                    embedding_provider.name, embedding_provider.dimensions)
     else:
         logger.info("embedding: none (BM25-only mode)")
 
@@ -48,19 +50,22 @@ def main():
 
     register_observe_function(
         sdk, kv, dedup_map, config.max_observations_per_session)
+    register_compress_function(sdk, kv, provider)
     register_context_function(sdk, kv, config.token_budget)
     register_summarize_function(sdk, kv, provider)
     register_privacy_function(sdk)
 
     if config.team_config:
         register_team_function(sdk, kv, config.team_config)
-        logger.info("team memory: %s (%s)", config.team_config.team_id, config.team_config.mode)
+        logger.info("team memory: %s (%s)",
+                    config.team_config.team_id, config.team_config.mode)
 
     register_api_triggers(sdk, kv)
 
     if config.bridge_config.enabled:
         register_claude_bridge_function(sdk, kv, config.bridge_config)
-        logger.info("claude bridge → %s", config.bridge_config.memory_file_path)
+        logger.info("claude bridge → %s",
+                    config.bridge_config.memory_file_path)
 
     stop_event = threading.Event()
 

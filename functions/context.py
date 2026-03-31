@@ -1,3 +1,7 @@
+from state.schema import KV
+from state.kv import StateKV
+from schema.base import Model
+from schema import ContextBlock, ProjectProfile, Session
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
@@ -6,11 +10,6 @@ from iii import IIIClient
 from logger import get_logger
 
 logger = get_logger("context")
-
-from schema import ContextBlock, ProjectProfile, Session
-from schema.base import Model
-from state.kv import StateKV
-from state.schema import KV
 
 
 @dataclass(frozen=True)
@@ -26,8 +25,8 @@ class ContextHandlerParams(Model):
 
 
 def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) -> None:
-    async def handle_context(data_raw: dict):
-        data = ContextHandlerParams.from_dict(data_raw)
+    async def handle_context(raw_data: dict):
+        data = ContextHandlerParams.from_dict(raw_data)
 
         budget = data.budget if data.budget is not None else token_budget
         blocks: List[ContextBlock] = []
