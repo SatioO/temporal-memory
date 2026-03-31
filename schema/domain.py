@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel
+from schema.base import Model
 
 
 class ObservationType(str, Enum):
@@ -57,31 +58,34 @@ class HookType(str, Enum):
     SESSION_END = "session_end"
 
 
-class HookPayload(BaseModel):
+@dataclass(frozen=True)
+class HookPayload(Model):
     hook_type: HookType
     session_id: str
     project: str
     cwd: str
     timestamp: str
-    data: Any
+    data: Any = None
 
 
-class CompressedObservation(BaseModel):
+@dataclass(frozen=True)
+class CompressedObservation(Model):
     id: str
     session_id: str
     timestamp: str
     type: ObservationType
     title: str
-    subtitle: Optional[str]
-    facts: list[str]
+    facts: list
     narrative: str
-    concepts: list[str]
-    files: list[str]
+    concepts: list
+    files: list
     importance: int
-    confidence: Optional[float]
+    subtitle: Optional[str] = None
+    confidence: Optional[float] = None
 
 
-class Session(BaseModel):
+@dataclass(frozen=True)
+class Session(Model):
     id: str
     project: str
     cwd: str
@@ -93,43 +97,41 @@ class Session(BaseModel):
     tags: Optional[str] = None
 
 
-class Memory(BaseModel):
+@dataclass(frozen=True)
+class Memory(Model):
     id: str
     created_at: str
     updated_at: str
-
     type: MemoryType
-
     title: str
     content: str
-
     concepts: List[str]
     files: List[str]
     session_ids: List[str]
-
     strength: float
     version: int
-
+    is_latest: bool
     parent_id: Optional[str] = None
     supersedes: Optional[List[str]] = None
     related_ids: Optional[List[str]] = None
     source_observation_ids: Optional[List[str]] = None
-
-    is_latest: bool
     forget_after: Optional[str] = None
 
 
-class ProjectTopConcepts(BaseModel):
+@dataclass(frozen=True)
+class ProjectTopConcepts(Model):
     concept: str
     frequency: str
 
 
-class ProjectTopFiles(BaseModel):
+@dataclass(frozen=True)
+class ProjectTopFiles(Model):
     file: str
     frequency: str
 
 
-class ProjectProfile(BaseModel):
+@dataclass(frozen=True)
+class ProjectProfile(Model):
     project: str
     updated_at: str
     top_concepts: List[ProjectTopConcepts]
@@ -142,14 +144,16 @@ class ProjectProfile(BaseModel):
     summary: Optional[str] = None
 
 
-class ContextBlock(BaseModel):
+@dataclass(frozen=True)
+class ContextBlock(Model):
     type: Literal["summary", "observation", "memory"]
     content: str
     tokens: int
     recency: int
 
 
-class CircuitBreakerSnapshot(BaseModel):
+@dataclass(frozen=True)
+class CircuitBreakerSnapshot(Model):
     state: CircuitBreakerState
     failures: int
     last_failure_at: Optional[float] = None

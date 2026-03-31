@@ -1,38 +1,49 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Awaitable, Callable, Generic, Optional, TypeVar
-from pydantic import BaseModel
+
+from schema.base import to_primitive
 
 T = TypeVar("T")
 
 
 # --- HTTP types ---
-class Request(BaseModel, Generic[T]):
+
+@dataclass
+class Request(Generic[T]):
     body: T
-    headers: dict[str, str] = {}
-    params: dict[str, str] = {}
+    headers: dict[str, str] = field(default_factory=dict)
+    params: dict[str, str] = field(default_factory=dict)
 
 
-class ApiSuccess(BaseModel, Generic[T]):
+@dataclass
+class ApiSuccess(Generic[T]):
     data: T
 
 
-class Response(BaseModel, Generic[T]):
+@dataclass
+class Response(Generic[T]):
     status_code: int
     body: T
+
+    def to_dict(self) -> dict:
+        return {
+            "status_code": self.status_code,
+            "body": to_primitive(self.body),
+        }
 
 
 # --- Error contract ---
 
 class ErrorCode(str, Enum):
-    SESSION_NOT_FOUND  = "session_not_found"
-    INVALID_PAYLOAD    = "invalid_payload"
-    INTERNAL_ERROR     = "internal_error"
-    UNAUTHORIZED       = "unauthorized"
-    NOT_FOUND          = "not_found"
-    CONFLICT           = "conflict"
+    SESSION_NOT_FOUND = "session_not_found"
+    INVALID_PAYLOAD = "invalid_payload"
+    INTERNAL_ERROR = "internal_error"
+    UNAUTHORIZED = "unauthorized"
+    NOT_FOUND = "not_found"
+    CONFLICT = "conflict"
 
 
 _STATUS_MAP: dict[ErrorCode, int] = {
@@ -45,10 +56,14 @@ _STATUS_MAP: dict[ErrorCode, int] = {
 }
 
 
-class ApiError(BaseModel):
+@dataclass(frozen=True)
+class ApiError:
     code: ErrorCode
     message: str
     details: Optional[dict] = None
+
+    def to_dict(self) -> dict:
+        return to_primitive(self)
 
 
 class ApiException(Exception):
@@ -64,7 +79,7 @@ class ApiException(Exception):
 
 
 # --- Middleware ---
-Handler    = Callable[[Request], Awaitable[Response]]
+Handler = Callable[[Request], Awaitable[Response]]
 Middleware = Callable[[Request, Handler], Awaitable[Response]]
 
 
@@ -91,7 +106,7 @@ class RouteConfig:
     method: str
     function_id: str
     handler: Handler
-    payload_type: Optional[type[BaseModel]]
+    payload_type: Optional[type]
 
 
 class ApiRouter:
@@ -100,7 +115,7 @@ class ApiRouter:
         self.prefix = prefix
         self.routes: list[RouteConfig] = []
 
-    def post(self, path: str, function_id: str, payload_type: Optional[type[BaseModel]]):
+    def post(self, path: str, function_id: str, payload_type: Optional[type] = None):
         def decorator(handler: Handler) -> Handler:
             self.routes.append(RouteConfig(
                 path=f"{self.prefix}/{path}",

@@ -4,13 +4,14 @@ import hashlib
 import json
 from typing import Dict
 
-from pydantic import BaseModel
+from dataclasses import dataclass
 
 TTL_MS = 5 * 60 * 1000
 CLEANUP_INTERVAL_MS = 60_000
 
 
-class DedupEntry(BaseModel):
+@dataclass
+class DedupEntry:
     hash: str
     expires_at: float
 

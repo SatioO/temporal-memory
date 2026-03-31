@@ -1,10 +1,11 @@
 import asyncio
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Optional
-from pydantic import BaseModel
-from state.kv import StateKV
 
 from schema import Session, SessionStatus
+from schema.base import Model
+from state.kv import StateKV
 from state.schema import KV
 from triggers.router import (
     ApiException, ApiRouter, ErrorCode,
@@ -12,33 +13,39 @@ from triggers.router import (
 )
 
 
-class SessionStartPayload(BaseModel):
+@dataclass(frozen=True)
+class SessionStartPayload(Model):
     session_id: str
     project: str
     cwd: str
     model: Optional[str] = None
 
 
-class SessionStartResponse(BaseModel):
+@dataclass(frozen=True)
+class SessionStartResponse(Model):
     session: Session
     context: str
 
 
-class SessionEndPayload(BaseModel):
+@dataclass(frozen=True)
+class SessionEndPayload(Model):
     session_id: str
 
 
-class SessionEndResponse(BaseModel):
+@dataclass(frozen=True)
+class SessionEndResponse(Model):
     success: bool
 
 
-class _ContextHandlerParams(BaseModel):
+@dataclass(frozen=True)
+class _ContextHandlerParams(Model):
     session_id: str
     project: str
     budget: Optional[int] = None
 
 
-class _ContextResult(BaseModel):
+@dataclass(frozen=True)
+class _ContextResult(Model):
     context: str
 
 
@@ -59,16 +66,17 @@ def session_router(kv: StateKV, sdk: Any, middleware: list[Middleware] = None) -
         )
 
         _, context_result_raw = await asyncio.gather(
-            kv.set(KV.sessions, payload.session_id, session.model_dump()),
+            kv.set(KV.sessions, payload.session_id, session.to_dict()),
             sdk.trigger_async({
                 "function_id": "mem::context",
                 "payload": _ContextHandlerParams(
                     session_id=payload.session_id,
-                    project=payload.project)
+                    project=payload.project
+                ).to_dict()
             })
         )
 
-        parsed_context = _ContextResult(**context_result_raw)
+        parsed_context = _ContextResult.from_dict(context_result_raw)
         return Response(
             status_code=200,
             body=SessionStartResponse(
@@ -84,12 +92,13 @@ def session_router(kv: StateKV, sdk: Any, middleware: list[Middleware] = None) -
             raise ApiException(ErrorCode.SESSION_NOT_FOUND,
                                f"Session '{payload.session_id}' not found")
 
-        session = Session.model_validate(raw)
-        modified = session.model_copy(update={
-            "ended_at": datetime.now(timezone.utc).isoformat(),
-            "status": SessionStatus.COMPLETED,
-        })
-        await kv.set(KV.sessions, payload.session_id, modified.model_dump())
+        session = Session.from_dict(raw)
+        modified = replace(
+            session,
+            ended_at=datetime.now(timezone.utc).isoformat(),
+            status=SessionStatus.COMPLETED,
+        )
+        await kv.set(KV.sessions, payload.session_id, modified.to_dict())
 
         return Response(status_code=200, body=SessionEndResponse(success=True))
 

@@ -1,16 +1,19 @@
 import pytest
+from dataclasses import dataclass
 from triggers.router import (
     ApiRouter, ApiException, ApiError, ApiSuccess,
     ErrorCode, Request, Response, build_middleware_chain
 )
-from pydantic import BaseModel
+from schema.base import Model
 
 
-class SamplePayload(BaseModel):
+@dataclass(frozen=True)
+class SamplePayload(Model):
     name: str
 
 
-class SampleResponse(BaseModel):
+@dataclass(frozen=True)
+class SampleResponse(Model):
     greeting: str
 
 

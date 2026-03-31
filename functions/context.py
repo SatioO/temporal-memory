@@ -1,26 +1,30 @@
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
+
 from iii import IIIClient
-from pydantic import BaseModel
 
 from schema import ContextBlock, ProjectProfile, Session
+from schema.base import Model
 from state.kv import StateKV
 from state.schema import KV
 
 
-class ContextResult(BaseModel):
+@dataclass(frozen=True)
+class ContextResult(Model):
     context: str
 
 
-class ContextHandlerParams(BaseModel):
+@dataclass(frozen=True)
+class ContextHandlerParams(Model):
     session_id: str
     project: str
     budget: Optional[int] = None
 
 
 def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) -> None:
-    async def handle_context(data_raw: ContextHandlerParams):
-        data = ContextHandlerParams(**data_raw)
+    async def handle_context(data_raw: dict):
+        data = ContextHandlerParams.from_dict(data_raw)
 
         budget = data.budget if data.budget is not None else token_budget
         blocks: List[ContextBlock] = []
@@ -30,9 +34,9 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
         if profile is not None:
             print(f"[graphmind] found profile: {profile}")
 
-        # TODO: This needs more rethinking as it is getting all the sessions from cache than getting project specific sessions
+        # TODO: This needs more rethinking — currently gets all sessions, not project-specific
         raw_sessions = await kv.list(KV.sessions)
-        all_sessions: List[Session] = [Session.model_validate(
+        all_sessions: List[Session] = [Session.from_dict(
             s) for s in raw_sessions] if raw_sessions else []
 
         sessions = sorted(
@@ -41,10 +45,10 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
                 if s.project == data.project and s.id != data.session_id
             ],
             key=lambda s: datetime.fromisoformat(s.started_at),
-            reverse=True
+            reverse=True,
         )[:10]
 
         # TODO: Pending impl
-        return ContextResult(context="[TODO]: context not implemented")
+        return ContextResult(context="[TODO]: context not implemented").to_dict()
 
     sdk.register_function({"id": "mem::context"}, handle_context)

@@ -1,3 +1,4 @@
+from schema.base import Model
 from schema.config import (
     AppConfig,
     CloudBridgeConfig,
@@ -11,11 +12,15 @@ from schema.config import (
 from schema.domain import (
     CircuitBreakerSnapshot,
     CircuitBreakerState,
+    CompressedObservation,
     ContextBlock,
     EmbeddingProvider,
+    HookPayload,
+    HookType,
     Memory,
     MemoryProvider,
     MemoryType,
+    ObservationType,
     ProjectProfile,
     ProjectTopConcepts,
     ProjectTopFiles,
@@ -24,14 +29,20 @@ from schema.domain import (
 )
 
 __all__ = [
+    # base
+    "Model",
     # domain
     "CircuitBreakerSnapshot",
     "CircuitBreakerState",
+    "CompressedObservation",
     "ContextBlock",
     "EmbeddingProvider",
+    "HookPayload",
+    "HookType",
     "Memory",
     "MemoryProvider",
     "MemoryType",
+    "ObservationType",
     "ProjectProfile",
     "ProjectTopConcepts",
     "ProjectTopFiles",

@@ -47,19 +47,15 @@ class IIIAdapter(AbstractAdapter):
                 body = req_raw.get("body", {}) or {}
                 headers = req_raw.get("headers", {}) or {}
 
-                if route.payload_type is not None:
-                    parsed_body = route.payload_type(**body)
-                else:
-                    parsed_body = body
-
+                parsed_body = route.payload_type.from_dict(body) if route.payload_type else body
                 req = Request(body=parsed_body, headers=headers)
                 response = await chain(req)
-                return response.model_dump()
+                return response.to_dict()
 
             except ApiException as e:
-                return {"status_code": e.status_code, "body": e.to_error().model_dump()}
+                return {"status_code": e.status_code, "body": e.to_error().to_dict()}
             except Exception as e:
                 error = ApiError(code=ErrorCode.INTERNAL_ERROR, message=str(e))
-                return {"status_code": 500, "body": error.model_dump()}
+                return {"status_code": 500, "body": error.to_dict()}
 
         return handler

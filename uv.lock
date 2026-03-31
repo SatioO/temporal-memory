@@ -85,7 +85,6 @@ source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "iii-sdk" },
-    { name = "pydantic" },
 ]
 
 [package.optional-dependencies]
@@ -98,7 +97,6 @@ dev = [
 requires-dist = [
     { name = "anthropic", specifier = ">=0.86.0" },
     { name = "iii-sdk", specifier = ">=0.10.0" },
-    { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
 ]

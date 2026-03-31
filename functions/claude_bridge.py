@@ -1,27 +1,31 @@
 import os
+from dataclasses import dataclass
 from typing import Optional
+
 from iii import IIIClient
-from pydantic import BaseModel
 
 from schema import CloudBridgeConfig
+from schema.base import Model
 from schema.domain import Memory
 from state.kv import StateKV
 from state.schema import KV
 
 
-class ClaudeBridgeSyncError(BaseModel):
+@dataclass(frozen=True)
+class ClaudeBridgeSyncError(Model):
     success: bool
     error: str
 
 
-class ClaudeBridgeSyncResult(BaseModel):
+@dataclass(frozen=True)
+class ClaudeBridgeSyncResult(Model):
     success: bool
     path: Optional[str] = None
     lines: Optional[int] = None
     error: Optional[str] = None
 
 
-def serialize_to_memory_md(memories: list[Memory], project_summary: str, line_budget: str) -> str:
+def serialize_to_memory_md(memories: list[Memory], project_summary: str, line_budget: int) -> str:
     lines: list[str] = []
     lines.append("# Agent Memory (auto-synced by graphmind)")
     lines.append("")
@@ -59,27 +63,21 @@ def serialize_to_memory_md(memories: list[Memory], project_summary: str, line_bu
 
 def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBridgeConfig):
     async def handle_claude_bridge_sync(data_raw: dict):
-        print(
-            f"[graphmind] handle_claude_bridge_sync triggered")
+        print("[graphmind] handle_claude_bridge_sync triggered")
         if not config.enabled or config.memory_file_path is None:
-            return ClaudeBridgeSyncError(success=False, error="Claude bridge not configured")
+            return ClaudeBridgeSyncError(success=False, error="Claude bridge not configured").to_dict()
 
         try:
             raw_memories = await kv.get_group(KV.memories)
-            latest_memories = [
-                memory for memory in raw_memories if memory.is_latest]
+            memories = [Memory.from_dict(m) for m in raw_memories]
 
-            # TODO: visit later to understand more
             project_summary = ""
             if config.project_path:
                 profile = await kv.get(KV.profiles, config.project_path)
                 project_summary = profile["summary"] if profile is not None else ""
 
             md = serialize_to_memory_md(
-                latest_memories,
-                project_summary,
-                config.line_budget
-            )
+                memories, project_summary, config.line_budget)
 
             dir_path = os.path.dirname(config.memory_file_path)
             os.makedirs(dir_path, exist_ok=True)
@@ -88,18 +86,21 @@ def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBr
                 f.write(md)
 
             print(
-                f"Claude bridge: synced to MEMORY.md \n path: {config.memory_file_path} \n memories: {len(latest_memories)}")
+                f"Claude bridge: synced to MEMORY.md \n"
+                f" path: {config.memory_file_path} \n"
+                f" memories: {len(memories)}"
+            )
 
             return ClaudeBridgeSyncResult(
                 success=True,
                 path=str(config.memory_file_path),
-                lines=len(md.split("\n"))
-            )
+                lines=len(md.split("\n")),
+            ).to_dict()
 
         except Exception as err:
-            return ClaudeBridgeSyncResult(success=False, error=str(err))
+            return ClaudeBridgeSyncResult(success=False, error=str(err)).to_dict()
 
     sdk.register_function(
         {"id": "mem::claude-bridge-sync"},
-        handle_claude_bridge_sync
+        handle_claude_bridge_sync,
     )
