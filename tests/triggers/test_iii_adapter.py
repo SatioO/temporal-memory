@@ -1,16 +1,19 @@
 import pytest
+from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock
-from pydantic import BaseModel
 
+from schema.base import Model
 from triggers.router import ApiRouter, ApiException, ApiSuccess, ErrorCode, Request, Response
 from triggers.adapters.iii import IIIAdapter
 
 
-class Payload(BaseModel):
+@dataclass(frozen=True)
+class Payload(Model):
     value: str
 
 
-class Result(BaseModel):
+@dataclass(frozen=True)
+class Result(Model):
     echo: str
 
 

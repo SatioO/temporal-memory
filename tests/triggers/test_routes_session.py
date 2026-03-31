@@ -85,7 +85,7 @@ async def test_session_end_marks_session_completed():
         status=SessionStatus.ACTIVE,
         observation_count=0
     )
-    kv = make_kv(session_data=existing.model_dump())
+    kv = make_kv(session_data=existing.to_dict())
     sdk = make_sdk()
 
     router = session_router(kv, sdk)

@@ -1,8 +1,6 @@
 from enum import Enum
 from typing import Optional
 from iii import IIIClient
-from pydantic import BaseModel
-
 from functions.dedup import DedupMap
 from schema.domain import HookPayload
 from state.kv import StateKV
