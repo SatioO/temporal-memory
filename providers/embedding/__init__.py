@@ -1,16 +1,14 @@
 from typing import Optional
 
-from config import detect_embedding_provider
+from config import config
 from schema import EmbeddingProvider
 
 # TODO: add more embedding providers
 def create_embedding_provider() -> Optional[EmbeddingProvider]:
-    detected = detect_embedding_provider()
-
-    if not detected:
+    if not config.embedding_provider:
         return None
 
-    if detected == "openai":
+    if config.embedding_provider == "openai":
         return None
 
     return None

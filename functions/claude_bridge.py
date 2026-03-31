@@ -50,7 +50,7 @@ def serialize_to_memory_md(memories: list[Memory], project_summary: str, line_bu
         for cl in content_lines:
             if len(lines) >= line_budget - 1:
                 break
-            lines.push(cl)
+            lines.append(cl)
 
         lines.append("")
 
