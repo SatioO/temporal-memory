@@ -1,4 +1,4 @@
-from typing import Any, Callable
+from typing import Callable
 
 try:
     from iii import IIIClient, RegisterFunctionInput, RegisterTriggerInput
@@ -24,11 +24,12 @@ from triggers.router import (
 
 
 class IIIAdapter(AbstractAdapter):
-    def register(self, sdk: Any, routers: list[ApiRouter]) -> None:
+    def register(self, sdk: IIIClient, routers: list[ApiRouter]) -> None:
         for router in routers:
             for route in router.routes:
                 wrapped = self._wrap(route, router.middleware)
-                sdk.register_function(RegisterFunctionInput(id=route.function_id), wrapped)
+                sdk.register_function(RegisterFunctionInput(
+                    id=route.function_id), wrapped)
                 sdk.register_trigger(RegisterTriggerInput(
                     type="http",
                     function_id=route.function_id,

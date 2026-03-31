@@ -9,7 +9,6 @@ T = TypeVar("T")
 
 
 # --- HTTP types ---
-
 class Request(BaseModel, Generic[T]):
     body: T
     headers: dict[str, str] = {}
@@ -65,7 +64,6 @@ class ApiException(Exception):
 
 
 # --- Middleware ---
-
 Handler    = Callable[[Request], Awaitable[Response]]
 Middleware = Callable[[Request, Handler], Awaitable[Response]]
 
@@ -87,7 +85,6 @@ def build_middleware_chain(middleware: list[Middleware], handler: Handler) -> Ha
 
 
 # --- Router ---
-
 @dataclass
 class RouteConfig:
     path: str

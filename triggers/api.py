@@ -1,12 +1,6 @@
 # triggers/api.py
 from typing import Optional, Union
 
-try:
-    from iii import IIIClient
-except ModuleNotFoundError:
-    # Stub for environments where the iii SDK is not installed (e.g. tests).
-    IIIClient = None  # type: ignore[assignment,misc]
-
 from providers.resilient import ResilientProvider
 from state.kv import StateKV
 from triggers.adapters.iii import IIIAdapter
@@ -16,14 +10,14 @@ from triggers.routes.session import session_router
 
 
 def register_api_triggers(
-    sdk: IIIClient,
+    sdk,
     kv: StateKV,
     secret: Optional[str] = None,
     provider: Optional[Union[ResilientProvider, dict]] = None,
 ) -> None:
     middleware = [logging_middleware]
-    if secret:
-        middleware.append(make_auth_middleware(secret))
+    # if secret:
+    #     middleware.append(make_auth_middleware(secret))
 
     adapter = IIIAdapter()
     adapter.register(sdk, [

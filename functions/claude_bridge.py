@@ -100,6 +100,6 @@ def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBr
             return ClaudeBridgeSyncResult(success=False, error=str(err))
 
     sdk.register_function(
-        {"id": "mem::claude-bridge::sync"},
+        {"id": "mem::claude-bridge-sync"},
         handle_claude_bridge_sync
     )

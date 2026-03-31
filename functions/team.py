@@ -1,5 +1,5 @@
 from typing import Literal, TypedDict
-from iii import IIIClient, RegisterFunctionInput
+from iii import IIIClient
 from schema import TeamConfig
 from state.kv import StateKV
 
@@ -29,16 +29,16 @@ async def handle_team_feed(data: TeamFeedPayload):
 
 def register_team_function(sdk: IIIClient, kv: StateKV, team_config: TeamConfig):
     sdk.register_function(
-        RegisterFunctionInput(id="[graphmind]::team-share"),
+        {id: "[graphmind]::team-share"},
         handle_team_share
     )
 
     sdk.register_function(
-        RegisterFunctionInput(id="[graphmind]::team-feed"),
+        {id: "[graphmind]::team-feed"},
         handle_team_feed
     )
 
     sdk.register_function(
-        RegisterFunctionInput(id="[graphmind]::team-profile"),
+        {id: "[graphmind]::team-profile"},
         handle_team_profile
     )
