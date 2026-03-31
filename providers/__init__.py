@@ -1,4 +1,6 @@
+import os
 from typing import List
+from providers.openai import OpenAIProvider
 from schema import FallbackConfig, MemoryProvider, ProviderConfig
 from providers.anthropic import AnthropicProvider
 from providers.fallback_chain import FallbackChain
@@ -12,7 +14,14 @@ def _create_base_provider(config: ProviderConfig) -> MemoryProvider:
 
     if provider == "anthropic":
         return AnthropicProvider(
-            api_key="",
+            api_key=os.getenv("ANTHROPIC_API_KEY"),
+            model=config.model,
+            max_tokens=config.max_tokens
+        )
+
+    if provider == "openai":
+        return OpenAIProvider(
+            api_key=os.getenv("OPENAI_API_KEY"),
             model=config.model,
             max_tokens=config.max_tokens
         )

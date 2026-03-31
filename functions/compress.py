@@ -1,12 +1,15 @@
 from dataclasses import dataclass
+import dataclasses
 import json
 from iii import IIIClient
 
+from eval.quality import score_compression
 from eval.self_correct import compress_with_retry, CompressionValidationResult
-from prompts.compression import COMPRESSION_SYSTEM_PROMPT, Observation, build_compression_prompt, Observation
-from schema import Model, RawObservation, MemoryProvider
+from prompts.compression import COMPRESSION_SYSTEM_PROMPT, Observation, build_compression_prompt
+from schema import CompressedObservation, Model, RawObservation, MemoryProvider
 from state.kv import StateKV
 from logger import get_logger
+from state.schema import KV
 
 logger = get_logger("compress")
 
@@ -97,20 +100,47 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
         try:
             compression_result = await compress_with_retry(provider, COMPRESSION_SYSTEM_PROMPT, prompt, validator, 0)
             try:
-                result = json.loads(compression_result.response)
-            except json.JSONDecodeError:
-                result = None
-
-            if not result:
+                parsed_json = json.loads(compression_result.response)
+            except Exception:
                 logger.warning("Failed to parse compression result", {
                     "obs_id": data.observation_id,
                     "retried": compression_result.retried,
                 })
                 return {"success": False, "error": "compression_parsing_failed"}
 
-            logger.info(f"compression_result: {compression_result.response}")
+            compressed = CompressedObservation(
+                id=data.observation_id,
+                session_id=data.session_id,
+                timestamp=data.raw.timestamp,
+                type=parsed_json["type"],
+                title=parsed_json["title"],
+                facts=parsed_json["facts"],
+                narrative=parsed_json["narrative"],
+                concepts=parsed_json["concepts"],
+                files=parsed_json["files"],
+                importance=parsed_json["importance"],
+                subtitle=parsed_json.get("subtitle"),
+            )
+            quality_score = score_compression(compressed)
+            compressed = dataclasses.replace(compressed, confidence=quality_score/100)
+            logger.info(
+                f"compression_result: {parsed_json}, score: {quality_score}")
 
-            return {"success": True}
+            await kv.set(
+                KV.observations(data.session_id),
+                data.observation_id,
+                compressed,
+            )
+
+            logger.info("Observation compressed", {
+                "obs_id": data.observation_id,
+                "type": compressed.type,
+                "importance": compressed.importance,
+                "quality_score": quality_score,
+                "retried": compression_result.retried,
+            })
+
+            return {"success": True, "quality_score": quality_score}
         except Exception as err:
             logger.warning("compression failed (session_id: %s, observation_id: %s), error: %s",
                            data.session_id, data.observation_id, err)

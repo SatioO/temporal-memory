@@ -25,9 +25,8 @@ async def compress_with_retry(
     max_retries: int = 1
 ) -> CompressionResult:
     first = await provider.compress(system_prompt, user_prompt)
-    print(f"first: {first}")
+
     result = validator(first)
-    print(f"cimpression result: {result}")
 
     if result.valid:
         return CompressionResult(response=first, retried=False)

@@ -4,9 +4,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Literal, Optional
 
-ProviderType = Literal["agent-sdk", "anthropic", "gemini", "openrouter"]
+ProviderType = Literal["agent-sdk", "anthropic",
+                       "gemini", "openrouter", "openai"]
 
-_VALID_PROVIDERS: frozenset = frozenset({"anthropic", "gemini", "openrouter", "agent-sdk"})
+_VALID_PROVIDERS: frozenset = frozenset(
+    {"anthropic", "gemini", "openrouter", "agent-sdk", "openai"})
+
 _DEFAULT_DATA_DIR: str = str(Path.home() / ".graphmind")
 
 
@@ -55,10 +58,16 @@ def _clamp(value: float, lo: float, hi: float, fallback: float) -> float:
 def _detect_provider() -> tuple[ProviderType, str]:
     if os.getenv("ANTHROPIC_API_KEY"):
         return "anthropic", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+
+    if os.getenv("OPENAI_API_KEY"):
+        return "openai", os.getenv("OPENAI_MODEL", "gpt-4.1-nano")
+
     if os.getenv("GEMINI_API_KEY"):
-        return "gemini", os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+        return "gemini", os.getenv("GEMINI_MODEL", "gemini-3.0-flash")
+
     if os.getenv("OPENROUTER_API_KEY"):
         return "openrouter", os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4-20250514")
+
     return "agent-sdk", "claude-sonnet-4-20250514"
 
 
@@ -170,13 +179,17 @@ class AppConfig:
 
     def __post_init__(self) -> None:
         if not (1 <= self.rest_port <= 65535):
-            raise EnvironmentError(f"III_REST_PORT out of range: {self.rest_port}")
+            raise EnvironmentError(
+                f"III_REST_PORT out of range: {self.rest_port}")
         if not (1 <= self.streams_port <= 65535):
-            raise EnvironmentError(f"III_STREAMS_PORT out of range: {self.streams_port}")
+            raise EnvironmentError(
+                f"III_STREAMS_PORT out of range: {self.streams_port}")
         if not (0.0 <= self.bm25_weight <= 1.0):
-            raise EnvironmentError(f"BM25_WEIGHT must be 0–1, got {self.bm25_weight}")
+            raise EnvironmentError(
+                f"BM25_WEIGHT must be 0–1, got {self.bm25_weight}")
         if not (0.0 <= self.vector_weight <= 1.0):
-            raise EnvironmentError(f"VECTOR_WEIGHT must be 0–1, got {self.vector_weight}")
+            raise EnvironmentError(
+                f"VECTOR_WEIGHT must be 0–1, got {self.vector_weight}")
 
     # ------------------------------------------------------------------
     # Convenience views — map flat fields back to sub-config param types
@@ -210,16 +223,21 @@ class AppConfig:
         _load_env_file()
 
         provider, model = _detect_provider()
-        max_tokens    = _safe_int(os.getenv("MAX_TOKENS"), 4096)
-        bm25_weight   = _clamp(_safe_float(os.getenv("BM25_WEIGHT"),   0.4), 0.0, 1.0, 0.4)
-        vector_weight = _clamp(_safe_float(os.getenv("VECTOR_WEIGHT"), 0.6), 0.0, 1.0, 0.6)
+        max_tokens = _safe_int(os.getenv("MAX_TOKENS"), 4096)
+        bm25_weight = _clamp(_safe_float(
+            os.getenv("BM25_WEIGHT"),   0.4), 0.0, 1.0, 0.4)
+        vector_weight = _clamp(_safe_float(
+            os.getenv("VECTOR_WEIGHT"), 0.6), 0.0, 1.0, 0.6)
 
-        raw_fallback       = os.getenv("FALLBACK_PROVIDERS", "")
-        fallback_providers = [p.strip() for p in raw_fallback.split(",") if p.strip() in _VALID_PROVIDERS]
+        raw_fallback = os.getenv("FALLBACK_PROVIDERS", "")
+        fallback_providers = [p.strip() for p in raw_fallback.split(
+            ",") if p.strip() in _VALID_PROVIDERS]
 
-        bridge_enabled   = os.getenv("CLAUDE_MEMORY_BRIDGE", "false").lower() == "true"
-        project_path     = os.getenv("CLAUDE_PROJECT_PATH")
-        memory_file_path = _build_memory_path(project_path) if bridge_enabled and project_path else ""
+        bridge_enabled = os.getenv(
+            "CLAUDE_MEMORY_BRIDGE", "false").lower() == "true"
+        project_path = os.getenv("CLAUDE_PROJECT_PATH")
+        memory_file_path = _build_memory_path(
+            project_path) if bridge_enabled and project_path else ""
 
         return cls(
             engine_url=os.getenv("III_ENGINE_URL", "ws://localhost:49134"),
@@ -229,7 +247,8 @@ class AppConfig:
             model=model,
             max_tokens=max_tokens,
             token_budget=_safe_int(os.getenv("TOKEN_BUDGET"), 2000),
-            max_observations_per_session=_safe_int(os.getenv("MAX_OBS_PER_SESSION"), 500),
+            max_observations_per_session=_safe_int(
+                os.getenv("MAX_OBS_PER_SESSION"), 500),
             data_dir=os.getenv("DATA_DIR", _DEFAULT_DATA_DIR),
             embedding_provider=_detect_embedding_provider(),
             bm25_weight=bm25_weight,
@@ -237,9 +256,11 @@ class AppConfig:
             fallback_providers=fallback_providers,
             team_id=os.getenv("TEAM_ID"),
             user_id=os.getenv("USER_ID"),
-            team_mode="shared" if os.getenv("USER_MODE") == "shared" else "private",
+            team_mode="shared" if os.getenv(
+                "USER_MODE") == "shared" else "private",
             claude_bridge_enabled=bridge_enabled,
             claude_bridge_memory_file_path=memory_file_path,
-            claude_bridge_line_budget=_safe_int(os.getenv("CLAUDE_MEMORY_LINE_BUDGET"), 200),
+            claude_bridge_line_budget=_safe_int(
+                os.getenv("CLAUDE_MEMORY_LINE_BUDGET"), 200),
             claude_project_path=project_path,
         )
