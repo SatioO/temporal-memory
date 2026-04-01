@@ -8,7 +8,6 @@ from state.kv import StateKV
 from triggers.api import register_api_triggers
 from providers import create_fallback_provider, create_provider
 from providers.embedding import create_embedding_provider
-from functions.team import register_team_function
 from functions.summarize import register_summarize_function
 from functions.privacy import register_privacy_function
 from functions.observe import register_observe_function
@@ -54,11 +53,6 @@ def main():
     register_context_function(sdk, kv, config.token_budget)
     register_summarize_function(sdk, kv, provider)
     register_privacy_function(sdk)
-
-    if config.team_config:
-        register_team_function(sdk, kv, config.team_config)
-        logger.info("team memory: %s (%s)",
-                    config.team_config.team_id, config.team_config.mode)
 
     register_api_triggers(sdk, kv)
 

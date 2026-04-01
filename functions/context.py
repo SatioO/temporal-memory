@@ -111,10 +111,8 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
             raw_observations = observations_per_session[jdx] or []
             observations = [CompressedObservation.from_dict(
                 o) for o in raw_observations]
-            print(f"observations: {observations}")
             important = [
                 o for o in observations if o.title and o.importance >= 5]
-            print(f"important: {important}")
             if len(important) > 0:
                 items = "\n".join(
                     f"- [{o.type}] {o.title}: {o.narrative}"
@@ -137,7 +135,6 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
 
         sorted_blocks = sorted(
             blocks, key=lambda x: x.recency, reverse=True)
-        print(f"sorted_blocks: {sorted_blocks}")
 
         used_tokens = 0
         selected_blocks = []
@@ -151,8 +148,6 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
                 break
             selected_blocks.append(block.content)
             used_tokens += block.tokens
-
-        print(f"selected_blocks: {selected_blocks}")
 
         if len(selected_blocks) == 0:
             logger.warning(

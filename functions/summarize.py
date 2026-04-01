@@ -23,8 +23,8 @@ class SummarizationParams(Model):
 
 
 def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryProvider):
-
     async def handle_summarize(raw_data: dict):
+        logger.info("handle_summarize called")
         data = SummarizationParams.from_dict(raw_data)
 
         session = await kv.get(KV.sessions, data.session_id)
