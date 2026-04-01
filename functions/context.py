@@ -41,7 +41,6 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
         budget = data.budget if data.budget is not None else token_budget
         blocks: List[ContextBlock] = []
 
-        # TODO: This needs more rethinking — currently gets all sessions, not project-specific
         raw_sessions = await kv.list(KV.sessions)
         all_sessions: List[Session] = [Session.from_dict(
             s) for s in raw_sessions] if raw_sessions else []
@@ -93,6 +92,8 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
             else:
                 sessions_needing_obs.append(idx)
 
+        print(f"session_needs_observation: {len(sessions_needing_obs)}")
+
         async def safe_get_observations(session_id):
             try:
                 return await kv.list(KV.observations(session_id))
@@ -110,9 +111,10 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
             raw_observations = observations_per_session[jdx] or []
             observations = [CompressedObservation.from_dict(
                 o) for o in raw_observations]
+            print(f"observations: {observations}")
             important = [
                 o for o in observations if o.title and o.importance >= 5]
-
+            print(f"important: {important}")
             if len(important) > 0:
                 items = "\n".join(
                     f"- [{o.type}] {o.title}: {o.narrative}"
@@ -135,6 +137,7 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
 
         sorted_blocks = sorted(
             blocks, key=lambda x: x.recency, reverse=True)
+        print(f"sorted_blocks: {sorted_blocks}")
 
         used_tokens = 0
         selected_blocks = []
@@ -146,15 +149,17 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
         for block in sorted_blocks:
             if used_tokens + block.tokens > budget:
                 break
-            selected_blocks.append(block)
+            selected_blocks.append(block.content)
             used_tokens += block.tokens
+
+        print(f"selected_blocks: {selected_blocks}")
 
         if len(selected_blocks) == 0:
             logger.warning(
                 "no_context_available (project=%s)", data.project)
             return {"success": True, "context": "", "blocks": 0, "tokens": 0}
 
-        blocks_text = "\n\n".join(b.content for b in selected_blocks)
+        blocks_text = "\n\n".join(selected_blocks)
         result = f"{header}\n{blocks_text}\n{footer}"
         logger.info("context_generated (blocks=%s, tokens=%s)",
                     len(selected_blocks), used_tokens)
