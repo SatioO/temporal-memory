@@ -100,6 +100,7 @@ class CompressedObservation(Model):
 
 @dataclass(frozen=True)
 class SessionSummary(Model):
+    id: str
     session_id: str
     project: str
     created_at: str

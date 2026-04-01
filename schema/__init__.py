@@ -18,6 +18,7 @@ from schema.domain import (
     HookPayload,
     HookType,
     Memory,
+    SessionSummary,
     MemoryProvider,
     MemoryType,
     ObservationType,
@@ -50,6 +51,7 @@ __all__ = [
     "Session",
     "SessionStatus",
     "RawObservation",
+    "SessionSummary",
     # config
     "AppConfig",
     "CloudBridgeConfig",

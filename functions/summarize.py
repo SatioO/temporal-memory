@@ -2,6 +2,7 @@ import dataclasses
 import json
 from datetime import datetime, timezone
 from dataclasses import dataclass
+from re import I
 from iii import IIIClient
 
 from eval.quality import score_summary
@@ -102,6 +103,7 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
                 parsed_summary = json.loads(raw_summary.response)
 
                 summary = SessionSummary(
+                    id=data.session_id,
                     session_id=data.session_id,
                     project=session.get("project"),
                     created_at=datetime.now(timezone.utc).isoformat(),
@@ -118,7 +120,7 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
                     summary, confidence=quality_score/100)
 
                 await kv.set(KV.summaries, data.session_id, summary)
-                logger.info("Observation compressed", {
+                logger.info("Observation summarized", {
                     "session_id": data.session_id,
                     "title": summary.title,
                     "decisions": summary.key_decisions,

@@ -1,4 +1,4 @@
-from typing import List, Optional, TypeVar
+from typing import Optional, TypeVar
 from iii import IIIClient, TriggerRequest
 
 T = TypeVar("T")

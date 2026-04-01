@@ -122,6 +122,7 @@ def main() -> None:
         if is_ok(res):
             result = res.get("json") or {}
             context = result.get("context")
+            print(f"[graphmind] context:{context}")
 
             if context:
                 sys.stdout.write(context)

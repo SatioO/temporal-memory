@@ -15,7 +15,7 @@ Output EXACTLY this JSON format with no additional text:
     "path/to/modified/file"
   ],
   "concepts": [
-    "key concept from session"
+    "key concept from session (max 3)"
   ]
 }
 
