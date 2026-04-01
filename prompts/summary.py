@@ -52,13 +52,13 @@ def build_summary_prompt(observations: list[CompressedObservation]) -> str:
     lines = []
 
     for i, obs in enumerate(observations):
-        facts = "\n".join(f"  - {f}" for f in obs["facts"])
+        facts = "\n".join(f"  - {f}" for f in obs.facts)
 
         line = (
-            f"[{i + 1}] {obs['type']}: {obs['title']}\n"
-            f"{obs['narrative']}\n"
+            f"[{i + 1}] {obs.type}: {obs.title}\n"
+            f"{obs.narrative}\n"
             f"Facts:\n{facts}\n"
-            f"Files: {', '.join(obs['files'])}"
+            f"Files: {', '.join(obs.files)}"
         )
 
         lines.append(line)

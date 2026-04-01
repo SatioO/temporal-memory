@@ -16,6 +16,7 @@ class SummarizationValidationResult(Model):
     valid: bool
     errors: list[str]
 
+
 @dataclass(frozen=True)
 class CompressionResult(Model):
     response: str
@@ -59,7 +60,7 @@ async def summarize_with_retry(
     validator: Callable[[str], SummarizationValidationResult],
     max_retries: int = 1
 ) -> SummarizationResult:
-    first = await provider.compress(system_prompt, user_prompt)
+    first = await provider.summarize(system_prompt, user_prompt)
 
     result = validator(first)
 
@@ -67,7 +68,7 @@ async def summarize_with_retry(
         return SummarizationResult(response=first, retried=False)
 
     for _ in range(max_retries + 1):
-        retry = await provider.compress(
+        retry = await provider.summarize(
             system_prompt + f"\n\n {STRICT_PROMPT}", user_prompt)
         retry_result = validator(retry)
         if retry_result.valid:

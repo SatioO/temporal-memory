@@ -26,7 +26,7 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
     async def handle_summarize(raw_data: dict):
         data = SummarizationParams.from_dict(raw_data)
 
-        session = kv.get(KV.sessions, data.session_id)
+        session = await kv.get(KV.sessions, data.session_id)
         if not session:
             logger.warning("session not found (session_id: %s)",
                            data.session_id)
@@ -99,7 +99,8 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
             raw_summary = await summarize_with_retry(provider, SUMMARY_SYSTEM_PROMPT, prompt, validator, 1)
 
             try:
-                parsed_summary = json.loads(raw_summary)
+                parsed_summary = json.loads(raw_summary.response)
+
                 summary = SessionSummary(
                     session_id=data.session_id,
                     project=session.get("project"),
@@ -111,22 +112,24 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
                     concepts=parsed_summary["concepts"],
                     observation_count=len(observations)
                 )
+
                 quality_score = score_summary(summary)
                 summary = dataclasses.replace(
                     summary, confidence=quality_score/100)
 
-                await kv.set(KV.summaries, data.sessionId, summary)
+                await kv.set(KV.summaries, data.session_id, summary)
                 logger.info("Observation compressed", {
-                    "obs_id": data.observation_id,
+                    "session_id": data.session_id,
                     "title": summary.title,
                     "decisions": summary.key_decisions,
                     "quality_score": quality_score,
                 })
 
                 return {"success": True, "summary": summary, "quality_score": quality_score}
-            except Exception:
-                logger.warning("Failed to parse summary", {
-                    "session_id": data.session_id
+            except Exception as err:
+                logger.warning("Failed to parse summary (session_id: %s, error: %s)", {
+                    "session_id": data.session_id,
+                    "error": err
                 })
                 return {"success": False, "error": "summarization_parsing_failed"}
         except Exception as err:
