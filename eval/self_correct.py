@@ -12,7 +12,18 @@ class CompressionValidationResult(Model):
 
 
 @dataclass(frozen=True)
+class SummarizationValidationResult(Model):
+    valid: bool
+    errors: list[str]
+
+@dataclass(frozen=True)
 class CompressionResult(Model):
+    response: str
+    retried: bool
+
+
+@dataclass(frozen=True)
+class SummarizationResult(Model):
     response: str
     retried: bool
 
@@ -39,3 +50,27 @@ async def compress_with_retry(
             return CompressionResult(response=retry, retried=True)
 
     return CompressionResult(response=first, retried=True)
+
+
+async def summarize_with_retry(
+    provider: MemoryProvider,
+    system_prompt: str,
+    user_prompt: str,
+    validator: Callable[[str], SummarizationValidationResult],
+    max_retries: int = 1
+) -> SummarizationResult:
+    first = await provider.compress(system_prompt, user_prompt)
+
+    result = validator(first)
+
+    if result.valid:
+        return SummarizationResult(response=first, retried=False)
+
+    for _ in range(max_retries + 1):
+        retry = await provider.compress(
+            system_prompt + f"\n\n {STRICT_PROMPT}", user_prompt)
+        retry_result = validator(retry)
+        if retry_result.valid:
+            return SummarizationResult(response=retry, retried=True)
+
+    return SummarizationResult(response=first, retried=True)

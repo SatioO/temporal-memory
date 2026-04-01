@@ -24,7 +24,7 @@ async def with_keyed_lock(key: str, fn: Callable[[], Coroutine[Any, Any, Any]]):
 
 
 def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[DedupMap], max_observations_per_session: int):
-    async def handle_observe(raw_data: HookPayload):
+    async def handle_observe(raw_data: dict):
         payload: HookPayload = HookPayload.from_dict(raw_data)
 
         if (
@@ -56,7 +56,7 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
             if dedup_map.is_duplicate(dedup_hash):
                 return {
                     "deduplicated": True,
-                    "sessionId": payload.session_id,
+                    "session_id": payload.session_id,
                 }
 
             try:
@@ -104,6 +104,7 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
                             "error": f"Session observation limit reached ({max_observations_per_session})",
                         }
 
+                # TODO: Decide if this is required
                 await kv.set(KV.observations(payload.session_id), obs_id, raw)
 
                 if dedup_map and dedup_hash:

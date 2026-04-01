@@ -28,7 +28,7 @@ class CompressParams(Model):
 
 
 def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProvider):
-    async def handle_compress(raw_data: CompressParams):
+    async def handle_compress(raw_data: dict):
         data: CompressParams = CompressParams.from_dict(raw_data)
         prompt = build_compression_prompt(Observation(
             hook_type=data.raw.hook_type,
@@ -45,7 +45,7 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
             except Exception:
                 return CompressionValidationResult(
                     valid=False,
-                    errors=["Invalid JSON"]
+                    errors=["invalid_JSON"]
                 )
 
             errors = []
@@ -57,34 +57,34 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
 
             for field in required_fields:
                 if field not in output:
-                    errors.append(f"Missing field: {field}")
+                    errors.append(f"missing_field: {field}")
 
             if "type" in output and output["type"] not in ALLOWED_TYPES:
-                errors.append("Invalid type")
+                errors.append("invalid_type")
 
             if "title" in output:
                 if not isinstance(output["title"], str) or len(output["title"]) > 80:
-                    errors.append("Invalid title")
+                    errors.append("invalid_title")
 
             if "facts" in output:
                 if not isinstance(output["facts"], list) or not all(isinstance(f, str) for f in output["facts"]):
-                    errors.append("Invalid facts")
+                    errors.append("invalid_facts")
 
             if "narrative" in output:
                 if not isinstance(output["narrative"], str):
-                    errors.append("Invalid narrative")
+                    errors.append("invalid_narrative")
 
             if "concepts" in output:
                 if not isinstance(output["concepts"], list) or not all(isinstance(c, str) for c in output["concepts"]):
-                    errors.append("Invalid concepts")
+                    errors.append("invalid_concepts")
 
             if "files" in output:
                 if not isinstance(output["files"], list) or not all(isinstance(f, str) for f in output["files"]):
-                    errors.append("Invalid files")
+                    errors.append("invalid_files")
 
             if "importance" in output:
                 if not isinstance(output["importance"], int) or not (1 <= output["importance"] <= 10):
-                    errors.append("Invalid importance")
+                    errors.append("invalid_importance")
 
             if errors:
                 return CompressionValidationResult(
@@ -98,7 +98,7 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
             )
 
         try:
-            compression_result = await compress_with_retry(provider, COMPRESSION_SYSTEM_PROMPT, prompt, validator, 0)
+            compression_result = await compress_with_retry(provider, COMPRESSION_SYSTEM_PROMPT, prompt, validator, 1)
             try:
                 parsed_json = json.loads(compression_result.response)
             except Exception:
@@ -122,7 +122,8 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
                 subtitle=parsed_json.get("subtitle"),
             )
             quality_score = score_compression(compressed)
-            compressed = dataclasses.replace(compressed, confidence=quality_score/100)
+            compressed = dataclasses.replace(
+                compressed, confidence=quality_score/100)
             logger.info(
                 f"compression_result: {parsed_json}, score: {quality_score}")
 

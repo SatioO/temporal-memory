@@ -65,7 +65,7 @@ def serialize_to_memory_md(memories: list[Memory], project_summary: str, line_bu
 
 
 def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBridgeConfig):
-    async def handle_claude_bridge_sync(data_raw: dict):
+    async def handle_claude_bridge_sync(_: dict):
         logger.debug("handle_claude_bridge_sync triggered")
         if not config.enabled or config.memory_file_path is None:
             return ClaudeBridgeSyncError(success=False, error="Claude bridge not configured").to_dict()

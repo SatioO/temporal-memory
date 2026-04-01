@@ -99,6 +99,20 @@ class CompressedObservation(Model):
 
 
 @dataclass(frozen=True)
+class SessionSummary(Model):
+    session_id: str
+    project: str
+    created_at: str
+    title: str
+    narrative: str
+    key_decisions: list[str]
+    files_modified: list[str]
+    concepts: list[str]
+    observation_count: int
+    confidence: Optional[float] = None
+
+
+@dataclass(frozen=True)
 class Session(Model):
     id: str
     project: str
