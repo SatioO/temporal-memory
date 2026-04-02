@@ -7,6 +7,7 @@ from iii import IIIClient
 
 from eval.quality import score_summary
 from eval.self_correct import SummarizationValidationResult, summarize_with_retry
+from schema import Session
 from state.schema import KV
 from state.kv import StateKV
 from schema.domain import CompressedObservation, MemoryProvider, SessionSummary
@@ -27,7 +28,7 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
         logger.info("handle_summarize called")
         data = SummarizationParams.from_dict(raw_data)
 
-        session = await kv.get(KV.sessions, data.session_id)
+        session = await kv.get(KV.sessions, data.session_id, Session)
         if not session:
             logger.warning("session not found (session_id: %s)",
                            data.session_id)
