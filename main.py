@@ -7,6 +7,7 @@ from iii import register_worker, InitOptions
 
 from config import config
 from logger import get_logger
+from mcp.server import register_mcp_function
 from state.kv import StateKV
 from triggers.api import register_api_triggers
 from providers import create_fallback_provider, create_provider
@@ -45,9 +46,11 @@ def main():
         directory=viewer_dir,
     )
     viewer_server = http.server.HTTPServer(("", viewer_port), handler)
-    viewer_thread = threading.Thread(target=viewer_server.serve_forever, daemon=True)
+    viewer_thread = threading.Thread(
+        target=viewer_server.serve_forever, daemon=True)
     viewer_thread.start()
-    logger.info("viewer:   http://localhost:%s/?restPort=%s", viewer_port, config.rest_port)
+    logger.info("viewer:   http://localhost:%s/?restPort=%s",
+                viewer_port, config.rest_port)
 
     if embedding_provider:
         logger.info("embedding: %s (%s dims)",
@@ -68,6 +71,7 @@ def main():
     register_summarize_function(sdk, kv, provider)
     register_privacy_function(sdk)
 
+    register_mcp_function(sdk, kv)
     register_api_triggers(sdk, kv)
 
     if config.bridge_config.enabled:

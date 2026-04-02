@@ -50,9 +50,9 @@ class _ContextResult(Model):
 
 
 def session_router(kv: StateKV, sdk: Any, middleware: list[Middleware] = None) -> ApiRouter:
-    router = ApiRouter(prefix="graphmind/session", middleware=middleware)
+    router = ApiRouter(prefix="graphmind", middleware=middleware)
 
-    @router.post("start", "api::session::start", SessionStartPayload)
+    @router.post("session/start", "api::session::start", SessionStartPayload)
     async def handle_session_start(req: Request[SessionStartPayload]) -> Response:
         payload = req.body
         session = Session(
@@ -83,7 +83,7 @@ def session_router(kv: StateKV, sdk: Any, middleware: list[Middleware] = None) -
                 session=session, context=parsed_context.context),
         )
 
-    @router.post("end", "api::session::end", SessionEndPayload)
+    @router.post("session/end", "api::session::end", SessionEndPayload)
     async def handle_session_end(req: Request[SessionEndPayload]) -> Response:
         payload = req.body
         raw = await kv.get(KV.sessions, payload.session_id)
@@ -102,7 +102,7 @@ def session_router(kv: StateKV, sdk: Any, middleware: list[Middleware] = None) -
 
         return Response(status_code=200, body=SessionEndResponse(success=True))
 
-    @router.get("list", "api::sessions")
+    @router.get("sessions", "api::sessions")
     async def handle_sessions(req: Request) -> Response:
         sessions = await kv.list(KV.sessions)
         return Response(status_code=200, body={"sessions": sessions or []})
