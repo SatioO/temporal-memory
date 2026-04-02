@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from logger import get_logger
 from datetime import datetime, timezone
 from typing import List, Optional
-from schema import Memory, Model
+from schema import CompressedObservation, Memory, Model
 from state.kv import StateKV
 from iii import IIIClient
 
@@ -91,7 +91,7 @@ def register_remember_function(sdk: IIIClient, kv: StateKV):
                 deleted += 1
 
         if not data.observation_ids and data.session_id:
-            observations = await kv.list(KV.observations(data.session_id))
+            observations = await kv.list(KV.observations(data.session_id), CompressedObservation)
 
             for obs in observations:
                 await kv.delete(KV.observations(data.session_id), obs.get("id"))

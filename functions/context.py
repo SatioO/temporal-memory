@@ -41,9 +41,7 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
         budget = data.budget if data.budget is not None else token_budget
         blocks: List[ContextBlock] = []
 
-        raw_sessions = await kv.list(KV.sessions)
-        all_sessions: List[Session] = [Session.from_dict(
-            s) for s in raw_sessions] if raw_sessions else []
+        all_sessions = await kv.list(KV.sessions, Session)
 
         sessions = sorted(
             [
@@ -96,7 +94,7 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
 
         async def safe_get_observations(session_id):
             try:
-                return await kv.list(KV.observations(session_id))
+                return await kv.list(KV.observations(session_id), Session)
             except Exception as e:
                 logger.warning("Failed to fetch summary", {
                     "session_id": session_id, "error": str(e)})

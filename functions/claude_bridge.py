@@ -1,3 +1,8 @@
+from state.schema import KV
+from state.kv import StateKV
+from schema.domain import Memory
+from schema.base import Model
+from schema import CloudBridgeConfig
 import os
 from dataclasses import dataclass
 from typing import Optional
@@ -6,12 +11,6 @@ from iii import IIIClient
 from logger import get_logger
 
 logger = get_logger("claude_bridge")
-
-from schema import CloudBridgeConfig
-from schema.base import Model
-from schema.domain import Memory
-from state.kv import StateKV
-from state.schema import KV
 
 
 @dataclass(frozen=True)
@@ -71,8 +70,7 @@ def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBr
             return ClaudeBridgeSyncError(success=False, error="Claude bridge not configured").to_dict()
 
         try:
-            raw_memories = await kv.get_group(KV.memories)
-            memories = [Memory.from_dict(m) for m in raw_memories]
+            memories = await kv.list(KV.memories, Memory)
 
             project_summary = ""
             if config.project_path:
@@ -88,7 +86,8 @@ def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBr
             with open(config.memory_file_path, "w", encoding="utf-8") as f:
                 f.write(md)
 
-            logger.info("synced to MEMORY.md path=%s memories=%d", config.memory_file_path, len(memories))
+            logger.info("synced to MEMORY.md path=%s memories=%d",
+                        config.memory_file_path, len(memories))
 
             return ClaudeBridgeSyncResult(
                 success=True,

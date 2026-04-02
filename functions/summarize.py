@@ -33,12 +33,8 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
                            data.session_id)
             return {"success": False, "error": "session_not_found"}
 
-        raw_observations = await kv.list(KV.observations(data.session_id))
-        observations = [
-            CompressedObservation.from_dict(obs)
-            for obs in raw_observations
-            if obs.get("title")
-        ]
+        raw_observations = await kv.list(KV.observations(data.session_id), CompressedObservation)
+        observations = [obs for obs in raw_observations if obs.get("title")]
 
         if len(observations) == 0:
             logger.warning(

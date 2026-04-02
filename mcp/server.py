@@ -3,7 +3,7 @@ import json
 from typing import Any, Optional
 
 from iii import IIIClient
-from schema import Model
+from schema import Model, Session
 from state.kv import StateKV
 from state.schema import KV
 
@@ -62,7 +62,7 @@ def register_mcp_function(sdk: IIIClient, kv: StateKV):
         tool_name = data.name
 
         if tool_name == "memory_sessions":
-            sessions = await kv.get_group(KV.sessions)
+            sessions = await kv.list(KV.sessions, Session)
             return {
                 "status_code": 200,
                 "body": {

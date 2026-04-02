@@ -4,6 +4,7 @@ from logger import get_logger
 from dataclasses import replace
 from iii import IIIClient
 
+from schema import CompressedObservation
 from state.schema import KV, generate_id
 from state.kv import StateKV
 from schema.domain import HookPayload, RawObservation, Session, HookType
@@ -88,7 +89,7 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
 
             async def handler():
                 if max_observations_per_session and max_observations_per_session > 0:
-                    existing = await kv.list(KV.observations(payload.session_id))
+                    existing = await kv.list(KV.observations(payload.session_id), CompressedObservation)
                     if len(existing) >= max_observations_per_session:
                         return {
                             "success": False,

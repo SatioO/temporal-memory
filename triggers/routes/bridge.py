@@ -2,11 +2,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from functions.context import ContextPayload
+from schema import CompressedObservation
 from schema.base import Model
 from schema.domain import HookPayload
 from state.kv import StateKV
 from state.schema import KV
-from triggers.router import ApiRouter, Middleware, Request, Response
+from triggers.router import ApiException, ApiRouter, ErrorCode, Middleware, Request, Response
 
 
 @dataclass(frozen=True)
@@ -53,5 +54,15 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
             "payload": req.body.to_dict(),
         })
         return {"status_code": 200, "body": result}
+
+    @router.get("observations", "api::observations")
+    async def handle_observations(req: Request[None, dict[str, str]]) -> Response:
+        session_id = req.path_params.get("session_id")
+        if not session_id:
+            raise ApiException(ErrorCode.INVALID_PAYLOAD,
+                               "session_id is required")
+
+        observations = await kv.list(KV.observations(session_id), CompressedObservation)
+        return Response(status_code=200, body={"observations": observations or []})
 
     return router
