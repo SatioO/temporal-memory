@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from functions.context import ContextPayload
+from functions.remember import ForgetPayload, RememberPayload
 from schema import CompressedObservation
 from schema.base import Model
 from schema.domain import HookPayload
@@ -64,5 +65,21 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
 
         observations = await kv.list(KV.observations(session_id), CompressedObservation)
         return Response(status_code=200, body={"observations": observations or []})
+
+    @router.get("remember", "api::remember", RememberPayload)
+    async def handle_remember(req: Request[RememberPayload]) -> Response:
+        result = await sdk.trigger_async({
+            "function_id": "mem::remember",
+            "payload": req.body.to_dict(),
+        })
+        return {"status_code": 201, "body": result}
+
+    @router.get("forget", "api::forget", ForgetPayload)
+    async def handle_remember(req: Request[ForgetPayload]) -> Response:
+        result = await sdk.trigger_async({
+            "function_id": "mem::forget",
+            "payload": req.body.to_dict(),
+        })
+        return {"status_code": 200, "body": result}
 
     return router

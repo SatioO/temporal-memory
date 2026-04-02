@@ -35,7 +35,7 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
             return {"success": False, "error": "session_not_found"}
 
         raw_observations = await kv.list(KV.observations(data.session_id), CompressedObservation)
-        observations = [obs for obs in raw_observations if obs.get("title")]
+        observations = [obs for obs in raw_observations if obs.title]
 
         if len(observations) == 0:
             logger.warning(
@@ -102,7 +102,7 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
                 summary = SessionSummary(
                     id=data.session_id,
                     session_id=data.session_id,
-                    project=session.get("project"),
+                    project=session.project,
                     created_at=datetime.now(timezone.utc).isoformat(),
                     title=parsed_summary["title"],
                     narrative=parsed_summary["narrative"],
