@@ -2,7 +2,7 @@ from state.schema import KV
 from state.kv import StateKV
 from schema.domain import Memory
 from schema.base import Model
-from schema import CloudBridgeConfig
+from schema import CloudBridgeConfig, ProjectProfile
 import os
 from dataclasses import dataclass
 from typing import Optional
@@ -74,8 +74,8 @@ def register_claude_bridge_function(sdk: IIIClient, kv: StateKV, config: CloudBr
 
             project_summary = ""
             if config.project_path:
-                profile = await kv.get(KV.profiles, config.project_path)
-                project_summary = profile["summary"] if profile is not None else ""
+                profile = await kv.get(KV.profiles, config.project_path, ProjectProfile)
+                project_summary = profile.summary if profile is not None else ""
 
             md = serialize_to_memory_md(
                 memories, project_summary, config.line_budget)

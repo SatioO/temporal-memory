@@ -102,9 +102,8 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
                 if dedup_map and dedup_hash:
                     dedup_map.record(dedup_hash)
 
-                session_raw = await kv.get(KV.sessions, payload.session_id)
-                if session_raw:
-                    session: Session = Session.from_dict(session_raw)
+                session = await kv.get(KV.sessions, payload.session_id, Session)
+                if session:
                     await kv.set(
                         KV.sessions,
                         payload.session_id,

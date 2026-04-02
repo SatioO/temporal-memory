@@ -54,7 +54,7 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
 
         async def safe_get_summaries(session_id):
             try:
-                return await kv.get(KV.summaries, session_id)
+                return await kv.get(KV.summaries, session_id, SessionSummary)
             except Exception as e:
                 logger.warning("Failed to fetch summary", {
                     "session_id": session_id, "error": str(e)})
@@ -67,9 +67,8 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
         sessions_needing_obs = []
 
         for idx in range(len(sessions)):
-            raw_summary = summaries_per_session[idx]
-            summary = SessionSummary.from_dict(
-                raw_summary) if raw_summary else None
+            summary = summaries_per_session[idx]
+
             if summary:
                 content = (
                     f"## {summary.title}\n"

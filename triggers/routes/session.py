@@ -93,13 +93,12 @@ def session_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) -
     @router.post("session/end", "api::session::end", SessionEndPayload)
     async def handle_session_end(req: Request[SessionEndPayload, dict[str, str]]) -> Response:
         payload = req.body
-        raw = await kv.get(KV.sessions, payload.session_id)
+        session = await kv.get(KV.sessions, payload.session_id, Session)
 
-        if raw is None:
+        if session is None:
             raise ApiException(ErrorCode.SESSION_NOT_FOUND,
                                f"Session '{payload.session_id}' not found")
 
-        session = Session.from_dict(raw)
         modified = replace(
             session,
             ended_at=datetime.now(timezone.utc).isoformat(),
