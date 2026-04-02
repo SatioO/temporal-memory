@@ -3,7 +3,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from schema import Session, SessionStatus
+from schema import CompressedObservation, Session, SessionStatus
 from schema.base import Model
 from state.kv import StateKV
 from state.schema import KV
@@ -49,11 +49,16 @@ class _ContextResult(Model):
     context: str
 
 
-def session_router(kv: StateKV, sdk: Any, middleware: list[Middleware] = None) -> ApiRouter:
+@dataclass(frozen=True)
+class ObservationsParams(Model):
+    session_id: str
+
+
+def session_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) -> ApiRouter:
     router = ApiRouter(prefix="graphmind", middleware=middleware)
 
     @router.post("session/start", "api::session::start", SessionStartPayload)
-    async def handle_session_start(req: Request[SessionStartPayload]) -> Response:
+    async def handle_session_start(req: Request[SessionStartPayload, dict[str, str]]) -> Response:
         payload = req.body
         session = Session(
             id=payload.session_id,
@@ -80,11 +85,13 @@ def session_router(kv: StateKV, sdk: Any, middleware: list[Middleware] = None) -
         return Response(
             status_code=200,
             body=SessionStartResponse(
-                session=session, context=parsed_context.context),
+                session=session,
+                context=parsed_context.context
+            ),
         )
 
     @router.post("session/end", "api::session::end", SessionEndPayload)
-    async def handle_session_end(req: Request[SessionEndPayload]) -> Response:
+    async def handle_session_end(req: Request[SessionEndPayload, dict[str, str]]) -> Response:
         payload = req.body
         raw = await kv.get(KV.sessions, payload.session_id)
 
@@ -104,7 +111,17 @@ def session_router(kv: StateKV, sdk: Any, middleware: list[Middleware] = None) -
 
     @router.get("sessions", "api::sessions")
     async def handle_sessions(req: Request) -> Response:
-        sessions = await kv.list(KV.sessions)
+        sessions = await kv.list(KV.sessions, Session)
         return Response(status_code=200, body={"sessions": sessions or []})
+
+    @router.get("sessions/:session_id/observations", "api::observations")
+    async def handle_observations(req: Request[None, dict[str, str]]) -> Response:
+        session_id = req.path_params.get("session_id")
+        if not session_id:
+            raise ApiException(ErrorCode.INVALID_PAYLOAD,
+                               "session_id is required")
+
+        observations = await kv.list(KV.observations(session_id), CompressedObservation)
+        return Response(status_code=200, body={"observations": observations or []})
 
     return router

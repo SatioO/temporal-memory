@@ -1,7 +1,7 @@
 import dataclasses
 import json
 from enum import Enum
-from typing import Any, Union, get_args, get_origin, get_type_hints
+from typing import Any, Self, Union, get_args, get_origin, get_type_hints
 
 
 def to_primitive(obj: Any) -> Any:
@@ -52,7 +52,7 @@ def _coerce(annotation: Any, value: Any) -> Any:
 
 class Model:
     @classmethod
-    def from_dict(cls, data: dict) -> "Model":
+    def from_dict(cls, data: dict) -> Self:
         hints = get_type_hints(cls)
         kwargs: dict[str, Any] = {}
         for f in dataclasses.fields(cls):  # type: ignore[arg-type]

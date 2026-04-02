@@ -24,7 +24,7 @@ def mcp_router(sdk: Any, middleware: list[Middleware] = None) -> ApiRouter:
         print("handle_mcp_call called")
         result = await sdk.trigger_async({
             "function_id": "mcp::tools::call",
-            "payload": req.body,
+            "payload": req.body.to_dict(),
         })
 
         return Response(status_code=200, body=result)

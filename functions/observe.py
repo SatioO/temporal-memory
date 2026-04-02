@@ -1,26 +1,17 @@
+import json
+from typing import Optional
+from logger import get_logger
 from dataclasses import replace
+from iii import IIIClient
+
 from state.schema import KV, generate_id
 from state.kv import StateKV
-from schema.domain import HookPayload, RawObservation, Session
-from schema import HookType
+from schema.domain import HookPayload, RawObservation, Session, HookType
 from functions.privacy import strip_private_data
 from functions.dedup import DedupMap
-from iii import IIIClient
-from logger import get_logger
-import asyncio
-import json
-from typing import Any, Callable, Coroutine, Optional
+from functions.common import with_keyed_lock
 
 logger = get_logger("observe")
-
-_locks: dict[str, asyncio.Lock] = {}
-
-
-async def with_keyed_lock(key: str, fn: Callable[[], Coroutine[Any, Any, Any]]):
-    if key not in _locks:
-        _locks[key] = asyncio.Lock()
-    async with _locks[key]:
-        return await fn()
 
 
 def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[DedupMap], max_observations_per_session: int):

@@ -8,7 +8,7 @@ class StateKV:
     def __init__(self, sdk: IIIClient) -> None:
         self.sdk = sdk
 
-    async def get(self, scope: str, key: str) -> Optional[T]:
+    async def get(self, scope: str, key: str, type: type[T]) -> Optional[T]:
         return await self.sdk.trigger_async(TriggerRequest(function_id="state::get", payload={"scope": scope, "key": key}))
 
     async def set(self, scope: str, key: str, value: T) -> T:
@@ -17,8 +17,8 @@ class StateKV:
     async def delete(self, scope: str, key: str) -> None:
         return await self.sdk.trigger_async(TriggerRequest(function_id="state::delete", payload={"scope": scope, "key": key}))
 
-    async def get_group(self, scope: str) -> list[T]:
+    async def get_group(self, scope: str, type: type[T]) -> list[T]:
         return await self.sdk.trigger_async(TriggerRequest(function_id="state::list", payload={"scope": scope}))
 
-    async def list(self, scope: str) -> list[T]:
+    async def list(self, scope: str, type: type[T]) -> list[T]:
         return await self.sdk.trigger_async(TriggerRequest(function_id='state::list', payload={"scope": scope}))

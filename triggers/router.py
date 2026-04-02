@@ -2,20 +2,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Awaitable, Callable, Generic, Optional, TypeVar
+from typing import Awaitable, Callable, Generic, Optional, TypeVar, overload
 
 from schema.base import to_primitive
 
 T = TypeVar("T")
+P = TypeVar("P")
+Qs = TypeVar("Qs", default=dict[str, str])  # query params
 
 
 # --- HTTP types ---
 
 @dataclass
-class Request(Generic[T]):
+class Request(Generic[T, Qs]):
     body: T
+    params: dict[str, str] = field(default_factory=dict)          # SDK metadata (method, path, etc.)
+    query_params: Qs = field(default_factory=dict)                # e.g. ?session_id=123 — typed via decorator
+    path_params: dict[str, str] = field(default_factory=dict)    # e.g. /sessions/:id
     headers: dict[str, str] = field(default_factory=dict)
-    params: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -101,12 +105,13 @@ def build_middleware_chain(middleware: list[Middleware], handler: Handler) -> Ha
 
 # --- Router ---
 @dataclass
-class RouteConfig:
+class RouteConfig(Generic[T, Qs]):
     path: str
     method: str
     function_id: str
-    handler: Handler
-    payload_type: Optional[type]
+    handler: Callable[[Request[T, Qs]], Awaitable[Response]]
+    payload_type: Optional[type[T]]
+    params_type: Optional[type[Qs]]
 
 
 class ApiRouter:
@@ -115,26 +120,38 @@ class ApiRouter:
         self.prefix = prefix
         self.routes: list[RouteConfig] = []
 
-    def post(self, path: str, function_id: str, payload_type: Optional[type] = None):
-        def decorator(handler: Handler) -> Handler:
+    @overload
+    def post(self, path: str, function_id: str, payload_type: type[P]) -> Callable[[Callable[[Request[P, dict[str, str]]], Awaitable[Response]]], Callable[[Request[P, dict[str, str]]], Awaitable[Response]]]: ...
+    @overload
+    def post(self, path: str, function_id: str, payload_type: None = None) -> Callable[[Handler], Handler]: ...
+
+    def post(self, path: str, function_id: str, payload_type=None):
+        def decorator(handler):
             self.routes.append(RouteConfig(
                 path=f"{self.prefix}/{path}",
                 method="POST",
                 function_id=function_id,
                 handler=handler,
                 payload_type=payload_type,
+                params_type=None,
             ))
             return handler
         return decorator
 
-    def get(self, path: str, function_id: str):
-        def decorator(handler: Handler) -> Handler:
+    @overload
+    def get(self, path: str, function_id: str, params_type: type[Qs]) -> Callable[[Callable[[Request[None, Qs]], Awaitable[Response]]], Callable[[Request[None, Qs]], Awaitable[Response]]]: ...
+    @overload
+    def get(self, path: str, function_id: str, params_type: None = None) -> Callable[[Handler], Handler]: ...
+
+    def get(self, path: str, function_id: str, params_type=None):
+        def decorator(handler):
             self.routes.append(RouteConfig(
                 path=f"{self.prefix}/{path}",
                 method="GET",
                 function_id=function_id,
                 handler=handler,
                 payload_type=None,
+                params_type=params_type,
             ))
             return handler
         return decorator

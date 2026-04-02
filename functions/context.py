@@ -28,7 +28,7 @@ def escape_xml_attr(s: str) -> str:
 
 
 @dataclass(frozen=True)
-class ContextHandlerParams(Model):
+class ContextPayload(Model):
     session_id: str
     project: str
     budget: Optional[int] = None
@@ -36,7 +36,7 @@ class ContextHandlerParams(Model):
 
 def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) -> None:
     async def handle_context(raw_data: dict):
-        data = ContextHandlerParams.from_dict(raw_data)
+        data = ContextPayload.from_dict(raw_data)
 
         budget = data.budget if data.budget is not None else token_budget
         blocks: List[ContextBlock] = []

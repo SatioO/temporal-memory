@@ -22,7 +22,7 @@ def register_api_triggers(
 
     adapter = IIIAdapter()
     adapter.register(sdk, [
-        session_router(kv, sdk, middleware=middleware),
-        bridge_router(sdk, middleware=middleware),
+        session_router(sdk, kv, middleware=middleware),
+        bridge_router(sdk, kv, middleware=middleware),
         mcp_router(sdk, middleware=middleware)
     ])

@@ -46,9 +46,20 @@ class IIIAdapter(AbstractAdapter):
             try:
                 body = req_raw.get("body", {}) or {}
                 headers = req_raw.get("headers", {}) or {}
+                params = req_raw.get("params", {}) or {}
+                query_params_raw = req_raw.get("query_params", {}) or {}
+                path_params = req_raw.get("path_params", {}) or {}
 
                 parsed_body = route.payload_type.from_dict(body) if route.payload_type else body
-                req = Request(body=parsed_body, headers=headers)
+                parsed_query = route.params_type.from_dict(query_params_raw) if route.params_type else query_params_raw
+
+                req = Request(
+                    body=parsed_body,
+                    params=params,
+                    query_params=parsed_query,
+                    path_params=path_params,
+                    headers=headers,
+                )
                 response = await chain(req)
                 return response.to_dict()
 

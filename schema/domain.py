@@ -139,12 +139,6 @@ class Memory(Model):
     session_ids: List[str]
     strength: float
     version: int
-    is_latest: bool
-    parent_id: Optional[str] = None
-    supersedes: Optional[List[str]] = None
-    related_ids: Optional[List[str]] = None
-    source_observation_ids: Optional[List[str]] = None
-    forget_after: Optional[str] = None
 
 
 @dataclass(frozen=True)
