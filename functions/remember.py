@@ -14,22 +14,23 @@ logger = get_logger("remember")
 @dataclass(frozen=True)
 class RememberPayload(Model):
     content: str
-    type: Optional[str]
-    concepts: Optional[List[str]]
-    files: Optional[List[str]]
-    ttl_days: Optional[int]
-    source_ob_ids: Optional[List[str]]
+    type: Optional[str] = None
+    concepts: Optional[List[str]] = None
+    files: Optional[List[str]] = None
+    ttl_days: Optional[int] = None
+    source_ob_ids: Optional[List[str]] = None
 
 
 @dataclass(frozen=True)
 class ForgetPayload(Model):
-    session_id: Optional[str]
-    observation_ids: Optional[List[str]]
-    memory_id: Optional[str]
+    session_id: Optional[str] = None
+    observation_ids: Optional[List[str]] = None
+    memory_id: Optional[str] = None
 
 
 def register_remember_function(sdk: IIIClient, kv: StateKV):
     async def handle_remember(raw_data: dict):
+        print("handle_remember", raw_data)
         data = RememberPayload.from_dict(raw_data)
 
         if (not data.content or not isinstance(data.content, str) or not data.content.strip()):
@@ -104,9 +105,9 @@ def register_remember_function(sdk: IIIClient, kv: StateKV):
         return {"success": True, "deleted": deleted}
 
     sdk.register_function({
-        "id": "mem::remember"
-    }, handle_remember)
-
-    sdk.register_function({
         "id": "mem::forget"
     }, handle_forget)
+
+    sdk.register_function({
+        "id": "mem::remember",
+    }, handle_remember)

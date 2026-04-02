@@ -138,7 +138,6 @@ class Memory(Model):
     files: List[str]
     session_ids: List[str]
     strength: float
-    version: int
 
 
 @dataclass(frozen=True)

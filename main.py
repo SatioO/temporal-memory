@@ -6,6 +6,7 @@ import os
 from iii import register_worker, InitOptions
 
 from config import config
+from functions.remember import register_remember_function
 from logger import get_logger
 from mcp.server import register_mcp_function
 from state.kv import StateKV
@@ -70,6 +71,7 @@ def main():
     register_context_function(sdk, kv, config.token_budget)
     register_summarize_function(sdk, kv, provider)
     register_privacy_function(sdk)
+    register_remember_function(sdk, kv)
 
     register_mcp_function(sdk, kv)
     register_api_triggers(sdk, kv)

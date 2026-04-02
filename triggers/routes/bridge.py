@@ -38,7 +38,7 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
             "function_id": "mem::compress",
             "payload": req.body.to_dict(),
         })
-        return {"status_code": 200, "body": result}
+        return Response(status_code=200, body=result)
 
     @router.post("summarize", "api::summarize", SummarizePayload)
     async def handle_summarize(req: Request[SummarizePayload]) -> Response:
@@ -46,7 +46,7 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
             "function_id": "mem::summarize",
             "payload": req.body.to_dict(),
         })
-        return {"status_code": 200, "body": result}
+        return Response(status_code=200, body=result)
 
     @router.post("context", "api::context", ContextPayload)
     async def handle_context(req: Request[ContextPayload]) -> Response:
@@ -54,7 +54,7 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
             "function_id": "mem::context",
             "payload": req.body.to_dict(),
         })
-        return {"status_code": 200, "body": result}
+        return Response(status_code=200, body=result)
 
     @router.get("observations", "api::observations")
     async def handle_observations(req: Request[None, dict[str, str]]) -> Response:
@@ -66,20 +66,20 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
         observations = await kv.list(KV.observations(session_id), CompressedObservation)
         return Response(status_code=200, body={"observations": observations or []})
 
-    @router.get("remember", "api::remember", RememberPayload)
+    @router.post("remember", "api::remember", RememberPayload)
     async def handle_remember(req: Request[RememberPayload]) -> Response:
         result = await sdk.trigger_async({
             "function_id": "mem::remember",
             "payload": req.body.to_dict(),
         })
-        return {"status_code": 201, "body": result}
+        return Response(status_code=201, body=result)
 
-    @router.get("forget", "api::forget", ForgetPayload)
+    @router.post("forget", "api::forget", ForgetPayload)
     async def handle_remember(req: Request[ForgetPayload]) -> Response:
         result = await sdk.trigger_async({
             "function_id": "mem::forget",
             "payload": req.body.to_dict(),
         })
-        return {"status_code": 200, "body": result}
+        return Response(status_code=200, body=result)
 
     return router
