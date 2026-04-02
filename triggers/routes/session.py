@@ -113,7 +113,7 @@ def session_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) -
         sessions = await kv.list(KV.sessions, Session)
         return Response(status_code=200, body={"sessions": sessions or []})
 
-    @router.get("sessions/:session_id/observations", "api::observations")
+    @router.get("sessions/:session_id/observations", "api::session::observations")
     async def handle_observations(req: Request[None, dict[str, str]]) -> Response:
         session_id = req.path_params.get("session_id")
         if not session_id:
