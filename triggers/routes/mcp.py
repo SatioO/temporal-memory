@@ -1,6 +1,6 @@
 from typing import Any
 
-from mcp.server import MCPRequestPayload
+from mcp_tools.server import MCPRequestPayload
 from triggers.router import (
     ApiRouter, Middleware, Request, Response,
 )

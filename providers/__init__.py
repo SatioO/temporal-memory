@@ -1,12 +1,13 @@
 import os
 from typing import List
 from providers.openai import OpenAIProvider
+from providers.gemini import GeminiProvider
+from providers.openrouter import OpenRouterProvider
+from providers.agent_sdk import AgentSDKProvider
 from schema import FallbackConfig, MemoryProvider, ProviderConfig
 from providers.anthropic import AnthropicProvider
 from providers.fallback_chain import FallbackChain
 from providers.resilient import ResilientProvider
-
-# TODO: add more providers
 
 
 def _create_base_provider(config: ProviderConfig) -> MemoryProvider:
@@ -26,14 +27,27 @@ def _create_base_provider(config: ProviderConfig) -> MemoryProvider:
             max_tokens=config.max_tokens
         )
 
-    elif provider == "gemini":
-        raise NotImplementedError(f"Gemini provider is not implemented")
+    if provider == "gemini":
+        return GeminiProvider(
+            api_key=os.getenv("GEMINI_API_KEY"),
+            model=config.model,
+            max_tokens=config.max_tokens
+        )
 
-    elif provider == "openrouter":
-        raise NotImplementedError(f"OpenRouter provider is not implemented")
+    if provider == "openrouter":
+        return OpenRouterProvider(
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            model=config.model,
+            max_tokens=config.max_tokens
+        )
 
-    else:
-        raise NotImplementedError("Agent SDK provider is not implemented")
+    if provider == "agent-sdk":
+        return AgentSDKProvider(
+            model=config.model,
+            max_tokens=config.max_tokens
+        )
+
+    raise ValueError(f"Unknown provider: {provider}")
 
 
 def create_provider(config: ProviderConfig) -> ResilientProvider:

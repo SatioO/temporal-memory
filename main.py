@@ -8,7 +8,7 @@ from iii import register_worker, InitOptions
 from config import config
 from functions.remember import register_remember_function
 from logger import get_logger
-from mcp.server import register_mcp_function
+from mcp_tools.server import register_mcp_function
 from state.kv import StateKV
 from triggers.api import register_api_triggers
 from providers import create_fallback_provider, create_provider
