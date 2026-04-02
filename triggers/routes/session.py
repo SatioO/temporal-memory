@@ -102,4 +102,9 @@ def session_router(kv: StateKV, sdk: Any, middleware: list[Middleware] = None) -
 
         return Response(status_code=200, body=SessionEndResponse(success=True))
 
+    @router.get("list", "api::sessions")
+    async def handle_sessions(req: Request) -> Response:
+        sessions = await kv.list(KV.sessions)
+        return Response(status_code=200, body={"sessions": sessions or []})
+
     return router

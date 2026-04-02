@@ -126,3 +126,15 @@ class ApiRouter:
             ))
             return handler
         return decorator
+
+    def get(self, path: str, function_id: str):
+        def decorator(handler: Handler) -> Handler:
+            self.routes.append(RouteConfig(
+                path=f"{self.prefix}/{path}",
+                method="GET",
+                function_id=function_id,
+                handler=handler,
+                payload_type=None,
+            ))
+            return handler
+        return decorator

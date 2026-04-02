@@ -1,5 +1,8 @@
 import signal
 import threading
+import http.server
+import functools
+import os
 from iii import register_worker, InitOptions
 
 from config import config
@@ -34,6 +37,17 @@ def main():
     logger.info("provider: %s (%s)", config.provider, config.model)
     logger.info("REST API: http://localhost:%s/graphmind/*", config.rest_port)
     logger.info("streams:  ws://localhost:%s", config.streams_port)
+
+    viewer_port = config.rest_port - 1
+    viewer_dir = os.path.join(os.path.dirname(__file__), "viewer")
+    handler = functools.partial(
+        http.server.SimpleHTTPRequestHandler,
+        directory=viewer_dir,
+    )
+    viewer_server = http.server.HTTPServer(("", viewer_port), handler)
+    viewer_thread = threading.Thread(target=viewer_server.serve_forever, daemon=True)
+    viewer_thread.start()
+    logger.info("viewer:   http://localhost:%s/?restPort=%s", viewer_port, config.rest_port)
 
     if embedding_provider:
         logger.info("embedding: %s (%s dims)",

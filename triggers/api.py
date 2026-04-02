@@ -8,7 +8,6 @@ from triggers.middleware import logging_middleware, make_auth_middleware
 from triggers.routes.bridge import bridge_router
 from triggers.routes.session import session_router
 
-
 def register_api_triggers(
     sdk,
     kv: StateKV,
