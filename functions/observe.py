@@ -84,7 +84,7 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
                 tool_input=tool_input,
                 tool_output=tool_output,
                 user_prompt=user_prompt,
-                raw=None,  # TODO: kept this to none to avoid dumping lot of data to cache
+                raw=sanitized_raw,  # TODO: kept this to none to avoid dumping lot of data to cache
             )
 
             async def handler():

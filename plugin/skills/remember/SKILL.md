@@ -1,6 +1,6 @@
 ---
 name: remember
-description: Explicitly save an insight, decision, or learning to agentmemory's long-term storage. Use when the user says "remember this", "save this", or wants to preserve knowledge for future sessions.
+description: Explicitly save an insight, decision, learning, or fact to graphmind's long-term storage. Use this skill whenever the user says "remember this", "save this", "don't forget", "store this", "keep this in memory", or wants to preserve any knowledge, decision, or context for future sessions. Also trigger when the user references saving architectural decisions, file paths, personal preferences, project-specific context, or code patterns they want recalled later. Lean toward triggering — if there's ambiguity about whether to save, save.
 argument-hint: "[what to remember]"
 user-invocable: true
 ---

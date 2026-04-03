@@ -6,6 +6,7 @@ import os
 from iii import register_worker, InitOptions
 
 from config import config
+from functions.file_context import register_file_context_function
 from functions.remember import register_remember_function
 from logger import get_logger
 from mcp_tools.server import register_mcp_function
@@ -72,6 +73,7 @@ def main():
     register_summarize_function(sdk, kv, provider)
     register_privacy_function(sdk)
     register_remember_function(sdk, kv)
+    register_file_context_function(sdk, kv)
 
     register_mcp_function(sdk, kv)
     register_api_triggers(sdk, kv)

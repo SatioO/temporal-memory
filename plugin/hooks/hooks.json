@@ -22,7 +22,7 @@
         ]
       }
     ],
-    
+
     "Stop": [
       {
         "matcher": "*",
@@ -71,13 +71,24 @@
         ]
       }
     ],
-    "PostToolUse": [
+    "PreToolUse": [
       {
-        "matcher": "Bash|Edit|Write",
+        "matcher": "Edit|Write|Read|Glob|Grep",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/post-tool-failure.py"
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pre-tool-use.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/post-tool-use.py"
           }
         ]
       }

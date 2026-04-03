@@ -7,6 +7,15 @@ sys.path.insert(0, os.path.dirname(__file__))
 from shared import REST_URL, fetch, log, auth_headers, read_json_stdin
 
 
+MAX_LEN = 2000
+
+
+def truncate(value, max_len=MAX_LEN):
+    if isinstance(value, str) and len(value) > max_len:
+        return value[:max_len] + "…"
+    return value
+
+
 def main() -> None:
     log("[graphmind] PostToolUse hook triggered ✓")
 
@@ -14,7 +23,17 @@ def main() -> None:
     session_id = data.get("session_id") or "unknown"
     project = data.get("cwd") or os.getcwd()
 
-    print(f"[graphmind] PostToolUse data: {data}")
+    tool_input = data.get("tool_input") or {}
+    command = tool_input.get("command") or ""
+
+    # Skip observing graphmind API calls to avoid recursive loops
+    if REST_URL and REST_URL in command:
+        return
+
+    tool_response = data.get("tool_response") or {}
+    safe_response = {
+        k: truncate(v) for k, v in tool_response.items()
+    }
 
     try:
         fetch(
@@ -29,11 +48,11 @@ def main() -> None:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": {
                     "tool_name": data.get("tool_name"),
-                    "tool_input": data.get("tool_input"),
-                    "tool_response": data.get("tool_response"),
+                    "tool_input": tool_input,
+                    "tool_response": safe_response,
                 },
             },
-            timeout=5,
+            timeout=10,
         )
 
     except Exception as err:

@@ -14,6 +14,8 @@ def main() -> None:
     session_id = data.get("session_id") or "unknown"
     project = data.get("cwd") or os.getcwd()
 
+    log(f"[graphmind] notification: {data}")
+
     try:
         fetch(
             url=f"{REST_URL}/graphmind/observe",

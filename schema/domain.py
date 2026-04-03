@@ -98,6 +98,12 @@ class CompressedObservation(Model):
     confidence: Optional[float] = None
 
 
+@dataclass
+class FileHistory(Model):
+    file: str
+    observations: list[CompressedObservation]
+
+
 @dataclass(frozen=True)
 class SessionSummary(Model):
     id: str

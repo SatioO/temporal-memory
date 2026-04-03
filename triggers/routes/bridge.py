@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from functions.context import ContextPayload
+from functions.file_context import FileContextPayload
 from functions.remember import ForgetPayload, RememberPayload
 from schema import CompressedObservation
 from schema.base import Model
@@ -78,6 +79,14 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
     async def handle_remember(req: Request[ForgetPayload]) -> Response:
         result = await sdk.trigger_async({
             "function_id": "mem::forget",
+            "payload": req.body.to_dict(),
+        })
+        return Response(status_code=200, body=result)
+
+    @router.post("file_context", "api::file_context", FileContextPayload)
+    async def handle_file_context(req: Request[FileContextPayload]) -> Response:
+        result = await sdk.trigger_async({
+            "function_id": "mem::file_context",
             "payload": req.body.to_dict(),
         })
         return Response(status_code=200, body=result)
