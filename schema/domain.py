@@ -204,6 +204,15 @@ class HybridSearchResult(Model):
     session_id: str
 
 
+@dataclass
+class CompactSearchResult(Model):
+    obs_id: str
+    session_id: str
+    title: str
+    score: float
+    timestamp: str
+
+
 class EmbeddingProvider(ABC):
     name: str
     dimensions: int

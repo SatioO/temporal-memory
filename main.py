@@ -8,11 +8,13 @@ from iii import register_worker, InitOptions
 from config import config
 from functions.file_context import register_file_context_function
 from functions.remember import register_remember_function
-from functions.search import register_search_function
+from functions.search import get_search_index, register_search_function
 from functions.smart_search import register_smart_search_fn
 from logger import get_logger
 from mcp_tools.server import register_mcp_function
+from state.hybrid_search import HybridSearch
 from state.kv import StateKV
+from state.vector_index import VectorIndex
 from triggers.api import register_api_triggers
 from providers import create_fallback_provider, create_provider
 from providers.embedding import create_embedding_provider
@@ -77,7 +79,19 @@ def main():
     register_remember_function(sdk, kv)
     register_file_context_function(sdk, kv)
     register_search_function(sdk, kv)
-    register_smart_search_fn(sdk, kv)
+
+    # Search functionality
+    bm25_index = get_search_index()
+    vector_index = VectorIndex() if embedding_provider != None else None
+    hybrid_search = HybridSearch(
+        kv,
+        bm25_index,
+        vector_index,
+        embedding_provider,
+        config.bm25_weight,
+        config.vector_weight
+    )
+    register_smart_search_fn(sdk, kv, hybrid_search.search)
 
     register_mcp_function(sdk, kv)
     register_api_triggers(sdk, kv)

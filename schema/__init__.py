@@ -12,6 +12,7 @@ from schema.config import (
 from schema.domain import (
     CircuitBreakerSnapshot,
     CircuitBreakerState,
+    CompactSearchResult,
     CompressedObservation,
     ContextBlock,
     EmbeddingProvider,
@@ -30,7 +31,7 @@ from schema.domain import (
     RawObservation,
     FileHistory,
     SearchResult,
-    HybridSearchResult
+    HybridSearchResult,
 )
 
 __all__ = [
@@ -56,6 +57,7 @@ __all__ = [
     "RawObservation",
     "SessionSummary",
     "FileHistory",
+    "CompactSearchResult",
     "SearchResult",
     "HybridSearchResult",
     # config
