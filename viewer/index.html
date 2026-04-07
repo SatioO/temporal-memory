@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Graphmind viewer</title>
+  <title>graphmind viewer</title>
   <style>
     * {
       margin: 0;
@@ -176,7 +176,7 @@
 
 <body>
   <div class="header">
-    <h1>GraphMind</h1>
+    <h1>graphmind</h1>
     <span id="status" class="status disconnected">disconnected</span>
   </div>
   <div class="controls">
@@ -190,11 +190,10 @@
   </div>
 
   <script>
+    const REST = window.location.origin;
     const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const params = new URLSearchParams(window.location.search);
-    const restPort = params.get('restPort') || String(parseInt(window.location.port || '3110') + 1);
-    const REST = `${window.location.protocol}//${window.location.hostname}:${restPort}`;
-    const wsPort = params.get('wsPort') || String(parseInt(restPort) + 1);
+    const wsPort = params.get('wsPort') || String(parseInt(window.location.port || '3111') + 1);
     const WS_URL = `${wsProto}//${window.location.hostname}:${wsPort}`;
     const timeline = document.getElementById('timeline');
     const statusEl = document.getElementById('status');
@@ -237,7 +236,7 @@
 
     async function loadSessions() {
       try {
-        const res = await fetch(`${REST}/graphmind/session/list`);
+        const res = await fetch(`${REST}/graphmind/sessions`);
         const data = await res.json();
         for (const s of data.sessions || []) {
           const opt = document.createElement('option');

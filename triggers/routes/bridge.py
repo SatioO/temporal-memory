@@ -6,6 +6,7 @@ from functions.file_context import FileContextPayload
 from functions.remember import ForgetPayload, RememberPayload
 from functions.search import SearchPayload
 from functions.smart_search import SmartSearchPayload
+from functions.timeline import TimelinePayload
 from schema import CompressedObservation
 from schema.base import Model
 from schema.domain import HookPayload
@@ -101,10 +102,18 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
         })
         return Response(status_code=200, body=result)
 
-    @router.post("search", "api::smart_search", SmartSearchPayload)
+    @router.post("smart_search", "api::smart_search", SmartSearchPayload)
     async def handle_smart_search(req: Request[SmartSearchPayload]) -> Response:
         result = await sdk.trigger_async({
             "function_id": "mem::smart_search",
+            "payload": req.body.to_dict(),
+        })
+        return Response(status_code=200, body=result)
+
+    @router.post("timeline", "api::timeline", TimelinePayload)
+    async def handle_timeline(req: Request[TimelinePayload]) -> Response:
+        result = await sdk.trigger_async({
+            "function_id": "mem::timeline",
             "payload": req.body.to_dict(),
         })
         return Response(status_code=200, body=result)

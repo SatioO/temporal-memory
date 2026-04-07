@@ -10,6 +10,7 @@ from functions.file_context import register_file_context_function
 from functions.remember import register_remember_function
 from functions.search import get_search_index, register_search_function
 from functions.smart_search import register_smart_search_fn
+from functions.timeline import register_timeline_function
 from logger import get_logger
 from mcp_tools.server import register_mcp_function
 from state.hybrid_search import HybridSearch
@@ -79,6 +80,7 @@ def main():
     register_remember_function(sdk, kv)
     register_file_context_function(sdk, kv)
     register_search_function(sdk, kv)
+    register_timeline_function(sdk, kv)
 
     # Search functionality
     bm25_index = get_search_index()
