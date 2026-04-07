@@ -131,12 +131,15 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
 
             get_search_index().add(compressed)
 
-            await sdk.trigger_async({"function_id": "stream::set", "payload": {
-                "stream_name": STREAM.name,
-                "group_id": STREAM.group(data.session_id),
-                "item_id": data.observation_id,
-                "data": {"type": "compressed", "observation": compressed},
-            }})
+            await sdk.trigger_async({
+                "function_id": "stream::set",
+                "payload": {
+                    "stream_name": STREAM.name,
+                    "group_id": data.session_id,
+                    "item_id": data.observation_id,
+                    "data": {"type": "compressed", "observation": compressed.to_dict()},
+                }
+            })
 
             await kv.set(
                 KV.observations(data.session_id),

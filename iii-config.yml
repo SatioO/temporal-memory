@@ -43,9 +43,3 @@ modules:
       exporter: memory
       logs_enabled: true
 
-  - class: modules::shell::ExecModule
-    config:
-      watch:
-        - src/**/*.ts
-      exec:
-        - node dist/index.mjs

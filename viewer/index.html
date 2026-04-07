@@ -176,7 +176,7 @@
 
 <body>
   <div class="header">
-    <h1>graphmind</h1>
+    <h1>GraphMind</h1>
     <span id="status" class="status disconnected">disconnected</span>
   </div>
   <div class="controls">
@@ -190,10 +190,11 @@
   </div>
 
   <script>
-    const REST = window.location.origin;
     const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const params = new URLSearchParams(window.location.search);
-    const wsPort = params.get('wsPort') || String(parseInt(window.location.port || '3111') + 1);
+    const restPort = params.get('restPort') || String(parseInt(window.location.port || '3110') + 1);
+    const REST = `${window.location.protocol}//${window.location.hostname}:${restPort}`;
+    const wsPort = params.get('wsPort') || String(parseInt(restPort) + 1);
     const WS_URL = `${wsProto}//${window.location.hostname}:${wsPort}`;
     const timeline = document.getElementById('timeline');
     const statusEl = document.getElementById('status');
@@ -201,6 +202,14 @@
     const sessionFilter = document.getElementById('session-filter');
     let observations = [];
     let ws = null;
+    let joinedGroups = new Set();
+
+    function joinGroup(groupId) {
+      if (!ws || ws.readyState !== WebSocket.OPEN || joinedGroups.has(groupId)) return;
+      joinedGroups.add(groupId);
+      const subscriptionId = crypto.randomUUID();
+      ws.send(JSON.stringify({ type: 'join', data: { streamName: 'mem-live', groupId, subscriptionId } }));
+    }
 
     function connect() {
       try {
@@ -208,19 +217,39 @@
         ws.onopen = () => {
           statusEl.textContent = 'connected';
           statusEl.className = 'status connected';
+          joinedGroups.clear();
+          // rejoin all known sessions
+          for (const opt of sessionFilter.options) {
+            if (opt.value) joinGroup(opt.value);
+          }
         };
         ws.onmessage = (e) => {
           try {
             const msg = JSON.parse(e.data);
-            if (msg.observation) {
-              const existing = observations.findIndex(o => o.id === msg.observation.id);
-              if (existing >= 0) {
-                observations[existing] = msg.observation;
-              } else {
-                observations.unshift(msg.observation);
-              }
-              render();
+            console.log({ msg })
+            const event = msg.event;
+            if (!event) return;
+            let rawItems = [];
+            if (Array.isArray(event.data)) {
+              rawItems = event.data;
+            } else if (event.data && typeof event.data === 'object') {
+              rawItems = [event.data];
             }
+            let changed = false;
+            for (const item of rawItems) {
+              if (!item) continue;
+              // data is {"type":"compressed","observation":{...}} or bare observation
+              const obs = item.observation || item;
+              if (!obs || !obs.id) continue;
+              const existing = observations.findIndex(o => o.id === obs.id);
+              if (existing >= 0) {
+                observations[existing] = obs;
+              } else {
+                observations.unshift(obs);
+              }
+              changed = true;
+            }
+            if (changed) render();
           } catch { }
         };
         ws.onclose = () => {
@@ -243,6 +272,7 @@
           opt.value = s.id;
           opt.textContent = `${s.project.split('/').pop()} (${s.id.slice(0, 8)})`;
           sessionFilter.appendChild(opt);
+          joinGroup(s.id);
         }
       } catch { }
     }
@@ -251,7 +281,7 @@
       const query = searchEl.value.toLowerCase();
       const session = sessionFilter.value;
       let filtered = observations;
-      if (session) filtered = filtered.filter(o => o.sessionId === session);
+      if (session) filtered = filtered.filter(o => (o.session_id || o.sessionId) === session);
       if (query) filtered = filtered.filter(o =>
         (o.title || '').toLowerCase().includes(query) ||
         (o.narrative || '').toLowerCase().includes(query) ||
