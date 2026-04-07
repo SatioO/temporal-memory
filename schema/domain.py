@@ -144,6 +144,12 @@ class Memory(Model):
     files: List[str]
     session_ids: List[str]
     strength: float
+    version: int
+    parent_id: Optional[str] = None
+    supersedes: Optional[List[str]] = None
+    related_ids: Optional[List[str]] = None
+    is_latest: bool = True
+    forget_after: Optional[str] = None
 
 
 @dataclass(frozen=True)

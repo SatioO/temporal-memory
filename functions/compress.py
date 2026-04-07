@@ -5,11 +5,12 @@ from iii import IIIClient
 
 from eval.quality import score_compression
 from eval.self_correct import compress_with_retry, CompressionValidationResult
+from functions.search import get_search_index
 from prompts.compression import COMPRESSION_SYSTEM_PROMPT, Observation, build_compression_prompt
 from schema import CompressedObservation, Model, RawObservation, MemoryProvider
 from state.kv import StateKV
 from logger import get_logger
-from state.schema import KV
+from state.schema import KV, STREAM
 
 logger = get_logger("compress")
 
@@ -124,8 +125,18 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
             quality_score = score_compression(compressed)
             compressed = dataclasses.replace(
                 compressed, confidence=quality_score/100)
+
             logger.info(
                 f"compression_result: {parsed_json}, score: {quality_score}")
+
+            get_search_index().add(compressed)
+
+            await sdk.trigger_async({"function_id": "stream::set", "payload": {
+                "stream_name": STREAM.name,
+                "group_id": STREAM.group(data.session_id),
+                "item_id": data.observation_id,
+                "data": {"type": "compressed", "observation": compressed},
+            }})
 
             await kv.set(
                 KV.observations(data.session_id),

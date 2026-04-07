@@ -6,6 +6,7 @@ import os
 from iii import register_worker, InitOptions
 
 from config import config
+from functions.auto_forget import register_auto_forget_function
 from functions.file_context import register_file_context_function
 from functions.remember import register_remember_function
 from functions.search import get_search_index, register_search_function
@@ -81,6 +82,7 @@ def main():
     register_file_context_function(sdk, kv)
     register_search_function(sdk, kv)
     register_timeline_function(sdk, kv)
+    register_auto_forget_function(sdk, kv)
 
     # Search functionality
     bm25_index = get_search_index()
@@ -107,6 +109,8 @@ def main():
 
     def shutdown(*_):
         logger.info("shutting down")
+        dedup_map.stop()
+        sdk.shutdown()
         stop_event.set()
 
     signal.signal(signal.SIGINT, shutdown)

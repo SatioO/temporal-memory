@@ -1,12 +1,13 @@
+import dataclasses
 from dataclasses import dataclass
 from logger import get_logger
 from datetime import datetime, timezone
 from typing import List, Optional
-from schema import CompressedObservation, Memory, Model
+from schema import CompressedObservation, Memory, MemoryType, Model
 from state.kv import StateKV
 from iii import IIIClient
 
-from state.schema import KV, generate_id
+from state.schema import KV, generate_id, jaccard_similarity
 
 logger = get_logger("remember")
 
@@ -17,8 +18,6 @@ class RememberPayload(Model):
     type: Optional[str] = None
     concepts: Optional[List[str]] = None
     files: Optional[List[str]] = None
-    ttl_days: Optional[int] = None
-    source_ob_ids: Optional[List[str]] = None
 
 
 @dataclass(frozen=True)
@@ -30,7 +29,7 @@ class ForgetPayload(Model):
 
 def register_remember_function(sdk: IIIClient, kv: StateKV):
     async def handle_remember(raw_data: dict):
-        print("handle_remember", raw_data)
+        logger.info("handle_remember: %s", raw_data)  # fix: was print() debug statement
         data = RememberPayload.from_dict(raw_data)
 
         if (not data.content or not isinstance(data.content, str) or not data.content.strip()):
@@ -42,22 +41,31 @@ def register_remember_function(sdk: IIIClient, kv: StateKV):
         if (data.concepts is not None and not isinstance(data.concepts, list)):
             return {"success": False, "error": "concepts must be an array"}
 
-        if (data.source_ob_ids is not None and not isinstance(data.source_ob_ids, list)):
-            return {"success": False, "error": "source_ob_ids must be an array"}
+       
+        valid_types = [m.value for m in MemoryType]
 
-        valid_types = [
-            "pattern",
-            "preference",
-            "architecture",
-            "bug",
-            "workflow",
-            "fact"
-        ]
-
-        mem_type = data.type if data.type in valid_types else "fact"
+        mem_type = MemoryType(data.type) if data.type in valid_types else MemoryType.PATTERN
 
         now = datetime.now(timezone.utc).isoformat()
-        # TODO: need existing memory checks, strength metric calculation
+
+        existing_memories = await kv.list(KV.memories, Memory)
+        superseded_id: Optional[str] = None
+        lower_content = data.content.lower()
+
+        for existing in existing_memories:
+            if not existing.is_latest:
+                continue
+
+            similarity = jaccard_similarity(
+                lower_content,
+                existing.content.lower()
+            )
+
+            if similarity > 0.7:
+                updated = dataclasses.replace(existing, is_latest=False)
+                await kv.set(KV.memories, existing.id, updated)
+                superseded_id = existing.id
+                break
 
         memory: Memory = Memory(
             id=generate_id("mem"),
@@ -66,10 +74,14 @@ def register_remember_function(sdk: IIIClient, kv: StateKV):
             type=mem_type,
             title=data.content[:80],
             content=data.content,
-            concepts=data.concepts,
-            files=data.files,
+            concepts=data.concepts or [],
+            files=data.files or [], 
             session_ids=[],
-            strength=7
+            strength=7,
+            version=2 if superseded_id is not None else 1,
+            parent_id=superseded_id,
+            supersedes=[superseded_id] if superseded_id is not None else [],
+            is_latest=True
         )
 
         await kv.set(KV.memories, memory.id, memory)
@@ -95,7 +107,7 @@ def register_remember_function(sdk: IIIClient, kv: StateKV):
             observations = await kv.list(KV.observations(data.session_id), CompressedObservation)
 
             for obs in observations:
-                await kv.delete(KV.observations(data.session_id), obs.get("id"))
+                await kv.delete(KV.observations(data.session_id), obs.id)  # fix: obs is a CompressedObservation dataclass, not a dict
 
             await kv.delete(KV.sessions, data.session_id)
             await kv.delete(KV.summaries, data.session_id)

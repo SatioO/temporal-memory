@@ -24,6 +24,7 @@ class DedupMap:
 
         self.cleanup_thread = threading.Thread(
             target=self._run_cleanup, daemon=True)
+        self.cleanup_thread.start()  # fix: thread was created but never started — stop() would raise RuntimeError("cannot join thread before it is started")
 
     def compute_hash(self, session_id: str, tool_name: str, tool_input) -> str:
         if isinstance(tool_input, str):
@@ -66,4 +67,4 @@ class DedupMap:
 
     def stop(self):
         self._stop_event.set()
-        self.cleanup_thread.join()
+        self.cleanup_thread.join(timeout=2)  # fix: no timeout meant stop() could block for up to CLEANUP_INTERVAL_MS (60s) while thread sleeps
