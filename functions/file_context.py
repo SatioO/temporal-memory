@@ -38,7 +38,6 @@ def register_file_context_function(sdk: IIIClient, kv: StateKV):
         other_sessions = sorted([s for s in sessions if s.id != data.session_id],
                                 key=lambda d: d.started_at, reverse=True)[:15]
 
-        logger.info("data_files: %s", data)
         for file in data.files:
             history = FileHistory(file=file, observations=[])
 
@@ -81,14 +80,12 @@ def register_file_context_function(sdk: IIIClient, kv: StateKV):
         if len(results) == 0:
             return {"context": ""}
 
-        lines = ["<agentmemory-file-context>"]
+        lines = ["# Agent File Context"]
 
         for fh in results:
             lines.append(f"## {fh.file}")
             for obs in fh.observations:
                 lines.append(f"- [{obs.type}] {obs.title}: {obs.narrative}")
-
-        lines.append("</agentmemory-file-context>")
 
         context = "\n".join(lines)
 

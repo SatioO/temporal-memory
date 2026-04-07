@@ -28,7 +28,9 @@ from schema.domain import (
     Session,
     SessionStatus,
     RawObservation,
-    FileHistory
+    FileHistory,
+    SearchResult,
+    HybridSearchResult
 )
 
 __all__ = [
@@ -54,6 +56,8 @@ __all__ = [
     "RawObservation",
     "SessionSummary",
     "FileHistory",
+    "SearchResult",
+    "HybridSearchResult",
     # config
     "AppConfig",
     "CloudBridgeConfig",

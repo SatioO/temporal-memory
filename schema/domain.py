@@ -188,6 +188,22 @@ class CircuitBreakerSnapshot(Model):
     opened_at: Optional[float] = None
 
 
+@dataclass(frozen=True)
+class SearchResult(Model):
+    obs_id: int
+    score: int
+    session_id: str
+
+
+@dataclass
+class HybridSearchResult(Model):
+    observation: CompressedObservation
+    bm25_score: float
+    vector_score: float
+    combined_score: float
+    session_id: str
+
+
 class EmbeddingProvider(ABC):
     name: str
     dimensions: int
