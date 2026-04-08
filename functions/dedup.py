@@ -20,11 +20,12 @@ class DedupMap:
     def __init__(self):
         self.entries: Dict[str, DedupEntry] = {}
         self._lock = threading.Lock()
+        # Event used both to signal stop AND as an interruptible sleep timer
         self._stop_event = threading.Event()
 
         self.cleanup_thread = threading.Thread(
             target=self._run_cleanup, daemon=True)
-        self.cleanup_thread.start()  # fix: thread was created but never started — stop() would raise RuntimeError("cannot join thread before it is started")
+        self.cleanup_thread.start()
 
     def compute_hash(self, session_id: str, tool_name: str, tool_input) -> str:
         if isinstance(tool_input, str):
@@ -53,9 +54,13 @@ class DedupMap:
             self.entries[hash_value] = DedupEntry(hash=hash_value, expires_at=expires_at)
 
     def _run_cleanup(self):
-        while not self._stop_event.is_set():
-            time.sleep(CLEANUP_INTERVAL_MS / 1000)
+        # Event.wait(timeout) replaces time.sleep():
+        # - returns False on timeout  → run cleanup, loop again
+        # - returns True when stop is signaled → exit immediately without waiting the full interval
+        while not self._stop_event.wait(timeout=CLEANUP_INTERVAL_MS / 1000):
             self.cleanup()
+        # Final cleanup on the way out — ensures entries are cleared before process exit
+        self.cleanup()
 
     def cleanup(self):
         now = time.time() * 1000
@@ -66,5 +71,10 @@ class DedupMap:
                 del self.entries[k]
 
     def stop(self):
+        # Signal the thread — Event.wait() in _run_cleanup wakes up immediately
         self._stop_event.set()
-        self.cleanup_thread.join(timeout=2)  # fix: no timeout meant stop() could block for up to CLEANUP_INTERVAL_MS (60s) while thread sleeps
+        # Give the thread enough time to finish its final cleanup() call
+        self.cleanup_thread.join(timeout=5)
+        # Unconditional clear as a safety net in case join timed out
+        with self._lock:
+            self.entries.clear()

@@ -109,6 +109,7 @@ def main():
 
     def shutdown(*_):
         logger.info("shutting down")
+        dedup_map.stop()
         sdk.shutdown()
         stop_event.set()
 
