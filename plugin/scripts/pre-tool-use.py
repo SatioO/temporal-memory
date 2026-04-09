@@ -10,29 +10,39 @@ def main() -> None:
     log("[graphmind] PreToolUse hook triggered ✓")
 
     data = read_json_stdin() or {}
-    session_id = data.get("session_id") or "unknown"
-
-    print(f"[graphmind] PreToolUse data: {data}")
 
     tool_name = data.get("tool_name")
-
     if not tool_name:
         return
 
-    file_tools = {"Edit", "Write", "Read", "Glob", "Grep"}
-    if tool_name not in file_tools:
+    if tool_name not in {"Edit", "Write", "Read", "Glob", "Grep"}:
         return
 
-    tool_input = data.get("tool_input") or {}
-    files = []
+    tool_input = data.get("tool_input", {})
 
-    for key in ["file_path", "path", "file", "pattern"]:
+    files = []
+    file_keys = ["path", "file"] if tool_name == "Grep" else [
+        "file_path",
+        "path",
+        "file",
+        "pattern",
+    ]
+
+    for key in file_keys:
         val = tool_input.get(key)
-        if isinstance(val, str) and val:
+        if isinstance(val, str) and len(val) > 0:
             files.append(val)
 
     if not files:
         return
+
+    terms = []
+    if tool_name in {"Grep", "Glob"}:
+        pattern = tool_input.get("pattern")
+        if isinstance(pattern, str) and len(pattern) > 0:
+            terms.append(pattern)
+
+    session_id = data.get("session_id") or "unknown"
 
     try:
         res = fetch(
@@ -41,7 +51,9 @@ def main() -> None:
             headers=auth_headers(),
             body={
                 "session_id": session_id,
-                "files": files
+                "files": files,
+                "terms": terms,
+                "tool_name": tool_name
             },
             timeout=5,
         )

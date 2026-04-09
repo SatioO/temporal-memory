@@ -30,7 +30,7 @@ class CompressParams(Model):
 
 def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProvider):
     async def handle_compress(raw_data: dict):
-        data: CompressParams = CompressParams.from_dict(raw_data)
+        data = CompressParams.from_dict(raw_data)
         prompt = build_compression_prompt(Observation(
             hook_type=data.raw.hook_type,
             tool_name=data.raw.tool_name,
@@ -131,6 +131,12 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
 
             get_search_index().add(compressed)
 
+            await kv.set(
+                KV.observations(data.session_id),
+                data.observation_id,
+                compressed,
+            )
+
             await sdk.trigger_async({
                 "function_id": "stream::set",
                 "payload": {
@@ -141,11 +147,15 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
                 }
             })
 
-            await kv.set(
-                KV.observations(data.session_id),
-                data.observation_id,
-                compressed,
-            )
+            await sdk.trigger_async({
+                "function_id": "stream::set",
+                "payload": {
+                    "stream_name": STREAM.name,
+                    "group_id": STREAM.viewer_group,
+                    "item_id": data.observation_id,
+                    "data": {"type": "compressed", "observation": compressed.to_dict(), "session_id": data.session_id},
+                }
+            })
 
             logger.info("Observation compressed", {
                 "obs_id": data.observation_id,

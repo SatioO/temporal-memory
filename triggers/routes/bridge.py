@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 from typing import Any
 
+from functions.auto_forget import AutoForgetPayload
+from functions.consolidate import ConsolidatePayload
 from functions.context import ContextPayload
+from functions.enrich import EnrichPayload
 from functions.file_context import FileContextPayload
 from functions.remember import ForgetPayload, RememberPayload
 from functions.search import SearchPayload
@@ -32,6 +35,14 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
     async def handle_observe(req: Request[HookPayload]) -> Response:
         result = await sdk.trigger_async({
             "function_id": "mem::observe",
+            "payload": req.body.to_dict(),
+        })
+        return Response(status_code=200, body=result)
+
+    @router.post("consolidate", "api::consolidate", ConsolidatePayload)
+    async def handle_consolidate(req: Request[ConsolidatePayload]) -> Response:
+        result = await sdk.trigger_async({
+            "function_id": "mem::consolidate",
             "payload": req.body.to_dict(),
         })
         return Response(status_code=200, body=result)
@@ -86,6 +97,43 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
         })
         return Response(status_code=200, body=result)
 
+    @router.post("enrich", "api::enrich", EnrichPayload)
+    async def handle_enrich(req: Request[EnrichPayload]) -> Response:
+        body = req.body
+        if (
+            not body.get("session_id")
+            or not isinstance(body.get("session_id"), str)
+            or not isinstance(body.get("files"), list)
+            or len(body["files"]) == 0
+            or not all(isinstance(f, str) for f in body["files"])
+        ):
+            return {
+                "status_code": 400,
+                "body": {
+                    "error": "session_id (string) and files (string[]) are required",
+                },
+            }
+
+        if (
+            body.get("terms") is not None
+            and (
+                not isinstance(body.get("terms"), list)
+                or not all(isinstance(t, str) for t in body["terms"])
+            )
+        ):
+            return {
+                "status_code": 400,
+                "body": {
+                    "error": "terms must be an array of strings"
+                },
+            }
+
+        result = await sdk.trigger_async({
+            "function_id": "mem::enrich",
+            "payload": req.body.to_dict(),
+        })
+        return Response(status_code=200, body=result)
+
     @router.post("file_context", "api::file_context", FileContextPayload)
     async def handle_file_context(req: Request[FileContextPayload]) -> Response:
         result = await sdk.trigger_async({
@@ -114,6 +162,14 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
     async def handle_timeline(req: Request[TimelinePayload]) -> Response:
         result = await sdk.trigger_async({
             "function_id": "mem::timeline",
+            "payload": req.body.to_dict(),
+        })
+        return Response(status_code=200, body=result)
+
+    @router.post("auto_forget", "api::auto_forget", AutoForgetPayload)
+    async def handle_auto_forget(req: Request[AutoForgetPayload]) -> Response:
+        result = await sdk.trigger_async({
+            "function_id": "mem::auto_forget",
             "payload": req.body.to_dict(),
         })
         return Response(status_code=200, body=result)

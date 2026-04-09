@@ -10,11 +10,13 @@ import uuid
 class Stream:
     name: str
     group: Callable[[str], str]
+    viewer_group: str
 
 
 STREAM = Stream(
     name="mem-live",
     group=lambda session_id: session_id,
+    viewer_group="viewer",
 )
 
 
@@ -23,6 +25,9 @@ class KV:
     profiles = "mem:profiles"
     memories = "mem:memories"
     summaries = "mem:summaries"
+    semantic = "mem:semantic"
+    procedural = "mem:procedural"
+    claude_bridge = "mem:claude-bridge"
 
     @staticmethod
     def observations(session_id: str) -> str:

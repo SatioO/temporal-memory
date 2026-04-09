@@ -34,15 +34,15 @@ def register_summarize_function(sdk: IIIClient, kv: StateKV, provider: MemoryPro
                            data.session_id)
             return {"success": False, "error": "session_not_found"}
 
-        raw_observations = await kv.list(KV.observations(data.session_id), CompressedObservation)
-        observations = [obs for obs in raw_observations if obs.title]
+        observations = await kv.list(KV.observations(data.session_id), CompressedObservation)
+        compressed = [obs for obs in observations if obs.title]
 
-        if len(observations) == 0:
+        if len(compressed) == 0:
             logger.warning(
                 "no observations to summarize (session_id: %s)", data.session_id)
             return {"success": False, "error": "no_observations"}
 
-        prompt = build_summary_prompt(observations)
+        prompt = build_summary_prompt(compressed)
 
         try:
             def validator(response: str) -> SummarizationValidationResult:

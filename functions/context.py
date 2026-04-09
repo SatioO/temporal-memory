@@ -89,8 +89,6 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
             else:
                 sessions_needing_obs.append(idx)
 
-        print(f"session_needs_observation: {len(sessions_needing_obs)}")
-
         async def safe_get_observations(session_id):
             try:
                 return await kv.list(KV.observations(session_id), Session)

@@ -4,7 +4,7 @@ from logger import get_logger
 from dataclasses import replace
 from iii import IIIClient
 
-from state.schema import KV, generate_id
+from state.schema import KV, STREAM, generate_id
 from state.kv import StateKV
 from schema.domain import HookPayload, RawObservation, Session, HookType
 from iii import TriggerRequest
@@ -22,7 +22,7 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
         if (
             not payload
             or not isinstance(payload.session_id, str)
-            or not isinstance(payload.hook_type, HookType)  # fix: was isinstance(..., str) — hook_type is HookType enum after from_dict; str check is unreliable for catching invalid values
+            or not isinstance(payload.hook_type, HookType)
             or not isinstance(payload.timestamp, str)
         ):
             return {
@@ -34,8 +34,6 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
 
         dedup_hash = None
 
-        # fix: dedup early-return was the only path into the pipeline — if dedup_map=None
-        # the entire sanitization, RawObservation build, KV write and compress trigger were skipped
         if dedup_map:
             d = payload.data if isinstance(payload.data, dict) else {}
             tool_name = d.get("tool_name") or payload.hook_type
@@ -79,7 +77,7 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
             id=obs_id,
             session_id=payload.session_id,
             timestamp=payload.timestamp,
-            hook_type=hook_type_str,  # fix: was HookType(hook_type_str) — hook_type_str is already a HookType enum after from_dict coercion; double-wrapping is redundant
+            hook_type=hook_type_str,
             tool_name=tool_name,
             tool_input=tool_input,
             tool_output=tool_output,
@@ -88,10 +86,6 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
         )
 
         async def handler():
-            # fix: fetch session once — reused for both limit check and count increment
-            # previously kv.list(..., CompressedObservation) was used for the limit but
-            # RawObservations don't deserialize as CompressedObservation so the count was
-            # always under-reported; session.observation_count is the accurate value
             session = await kv.get(KV.sessions, payload.session_id, Session)
 
             if max_observations_per_session and max_observations_per_session > 0:
@@ -107,14 +101,35 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
             if dedup_map and dedup_hash:
                 dedup_map.record(dedup_hash)
 
+            await sdk.trigger_async({
+                "function_id": "stream::set",
+                "payload": {
+                    "stream_name": STREAM.name,
+                    "group_id": payload.session_id,
+                    "item_id": obs_id,
+                    "data": {"type": "raw", "observation": raw.to_dict()},
+                }
+            })
+
+            await sdk.trigger_async({
+                "function_id": "stream::set",
+                "payload": {
+                    "stream_name": STREAM.name,
+                    "group_id": STREAM.viewer_group,
+                    "item_id": obs_id,
+                    "data": {"type": "raw", "observation": raw.to_dict(), "session_id": payload.session_id},
+                }
+            })
+
             if session:
                 await kv.set(
                     KV.sessions,
                     payload.session_id,
-                    replace(session, observation_count=session.observation_count + 1)
+                    replace(
+                        session, observation_count=session.observation_count + 1)
                 )
 
-            await sdk.trigger_async(TriggerRequest(  # fix: was plain dict — SDK expects TriggerRequest (consistent with all kv.py calls)
+            await sdk.trigger_async(TriggerRequest(
                 function_id="mem::compress",
                 payload={
                     "observation_id": obs_id,

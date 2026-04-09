@@ -153,6 +153,33 @@ class Memory(Model):
 
 
 @dataclass(frozen=True)
+class SemanticMemory(Model):
+    id: str
+    fact: str
+    confidence: int
+    source_session_ids: List[str]
+    source_memory_ids: List[str]
+    access_count: int
+    last_accessed_at: str
+    strength: int
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class ProceduralMemory(Model):
+    id: str
+    name: str
+    steps: List[str]
+    trigger_condition: str
+    frequency: int
+    source_session_ids: List[str]
+    strength: float
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
 class ProjectTopConcepts(Model):
     concept: str
     frequency: str

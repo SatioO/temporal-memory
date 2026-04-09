@@ -124,6 +124,13 @@ class CloudBridgeConfig:
 
 
 @dataclass(frozen=True)
+class ConsolidatePipelineConfig:
+    enabled: bool
+    decay_days: int
+    interval: int
+
+
+@dataclass(frozen=True)
 class EmbeddingConfig:
     provider: Optional[str]
     bm25_weight: float
@@ -165,6 +172,11 @@ class AppConfig:
 
     # Fallback
     fallback_providers: List[str]
+
+    # Consolidation
+    consolidation_enabled: bool
+    consolidation_decay_days: int
+    consolidation_interval_min: int
 
     # Team
     team_id: Optional[str]
@@ -218,6 +230,14 @@ class AppConfig:
             project_path=self.claude_project_path,
         )
 
+    @property
+    def consolidate_pipeline_config(self) -> ConsolidatePipelineConfig:
+        return ConsolidatePipelineConfig(
+            enabled=self.consolidation_enabled,
+            decay_days=self.consolidation_decay_days,
+            interval=self.consolidation_interval_min * 60,  # convert minutes → seconds
+        )
+
     @classmethod
     def from_env(cls) -> "AppConfig":
         _load_env_file()
@@ -238,6 +258,13 @@ class AppConfig:
         project_path = os.getenv("CLAUDE_PROJECT_PATH")
         memory_file_path = _build_memory_path(
             project_path) if bridge_enabled and project_path else ""
+
+        consolidation_enabled = os.getenv(
+            "CONSOLIDATION_ENABLED", "false").lower() == "true"
+        consolidation_decay_days = _safe_int(
+            os.getenv("CONSOLIDATION_DECAY_DAYS"), 30)
+        consolidation_interval_min = _safe_int(
+            os.getenv("CONSOLIDATION_INTERVAL"), 30)
 
         return cls(
             engine_url=os.getenv("III_ENGINE_URL", "ws://localhost:49134"),
@@ -263,4 +290,7 @@ class AppConfig:
             claude_bridge_line_budget=_safe_int(
                 os.getenv("CLAUDE_MEMORY_LINE_BUDGET"), 200),
             claude_project_path=project_path,
+            consolidation_enabled=consolidation_enabled,
+            consolidation_decay_days=consolidation_decay_days,
+            consolidation_interval_min=consolidation_interval_min
         )
