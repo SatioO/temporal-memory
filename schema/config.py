@@ -88,7 +88,10 @@ def _detect_embedding_provider() -> Optional[str]:
 
 
 def _build_memory_path(project_path: str) -> str:
-    safe = re.sub(r"^-+", "", re.sub(r"[/\\]", "-", project_path))
+    # Replace path separators with dashes — preserve the leading dash that comes
+    # from the opening slash so the folder name matches what Claude Code creates.
+    # e.g. /Users/foo/bar → -Users-foo-bar  (Claude Code uses this exact format)
+    safe = re.sub(r"[/\\]", "-", project_path)
     return str(Path.home() / ".claude" / "projects" / safe / "memory" / "MEMORY.md")
 
 
@@ -255,9 +258,8 @@ class AppConfig:
 
         bridge_enabled = os.getenv(
             "CLAUDE_MEMORY_BRIDGE", "false").lower() == "true"
-        project_path = os.getenv("CLAUDE_PROJECT_PATH")
-        memory_file_path = _build_memory_path(
-            project_path) if bridge_enabled and project_path else ""
+        project_path = os.getenv("CLAUDE_PROJECT_PATH") or os.getcwd()
+        memory_file_path = _build_memory_path(project_path) if bridge_enabled else ""
 
         consolidation_enabled = os.getenv(
             "CONSOLIDATION_ENABLED", "false").lower() == "true"
