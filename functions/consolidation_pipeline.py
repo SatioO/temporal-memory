@@ -80,9 +80,10 @@ def register_consolidation_pipeline_function(
         # ── Semantic tier ──────────────────────────────────────────────────────
         if tier in ("all", "semantic"):
             summaries = await kv.list(KV.summaries, SessionSummary)
+
             existing_semantic = await kv.list(KV.semantic, SemanticMemory)
 
-            if len(summaries) < 5:
+            if len(summaries) < 1:
                 results["semantic"] = {
                     "skipped": True,
                     "reason": "fewer than 5 summaries",

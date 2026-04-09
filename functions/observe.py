@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Optional
 from logger import get_logger
@@ -101,25 +102,25 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
             if dedup_map and dedup_hash:
                 dedup_map.record(dedup_hash)
 
-            await sdk.trigger_async({
-                "function_id": "stream::set",
-                "payload": {
-                    "stream_name": STREAM.name,
-                    "group_id": payload.session_id,
-                    "item_id": obs_id,
-                    "data": {"type": "raw", "observation": raw.to_dict()},
-                }
-            })
+            # await sdk.trigger_async({
+            #     "function_id": "stream::set",
+            #     "payload": {
+            #         "stream_name": STREAM.name,
+            #         "group_id": payload.session_id,
+            #         "item_id": obs_id,
+            #         "data": {"type": "raw", "observation": raw.to_dict()},
+            #     }
+            # })
 
-            await sdk.trigger_async({
-                "function_id": "stream::set",
-                "payload": {
-                    "stream_name": STREAM.name,
-                    "group_id": STREAM.viewer_group,
-                    "item_id": obs_id,
-                    "data": {"type": "raw", "observation": raw.to_dict(), "session_id": payload.session_id},
-                }
-            })
+            # await sdk.trigger_async({
+            #     "function_id": "stream::set",
+            #     "payload": {
+            #         "stream_name": STREAM.name,
+            #         "group_id": STREAM.viewer_group,
+            #         "item_id": obs_id,
+            #         "data": {"type": "raw", "observation": raw.to_dict(), "session_id": payload.session_id},
+            #     }
+            # })
 
             if session:
                 await kv.set(
@@ -129,14 +130,14 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
                         session, observation_count=session.observation_count + 1)
                 )
 
-            await sdk.trigger_async(TriggerRequest(
+            asyncio.create_task(sdk.trigger_async(TriggerRequest(
                 function_id="mem::compress",
                 payload={
                     "observation_id": obs_id,
                     "session_id": payload.session_id,
                     "raw": raw.to_dict(),
                 },
-            ))
+            )))
 
             logger.debug("observation captured obs_id=%s session_id=%s hook=%s",
                          obs_id, payload.session_id, payload.hook_type)

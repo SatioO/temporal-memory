@@ -66,7 +66,7 @@ def _detect_provider() -> tuple[ProviderType, str]:
         return "gemini", os.getenv("GEMINI_MODEL", "gemini-3.0-flash")
 
     if os.getenv("OPENROUTER_API_KEY"):
-        return "openrouter", os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4-20250514")
+        return "openrouter", os.getenv("OPENROUTER_MODEL", "minimax/minimax-m2.5")
 
     return "agent-sdk", "claude-sonnet-4-20250514"
 

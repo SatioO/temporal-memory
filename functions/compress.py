@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import dataclasses
 import json
-from iii import IIIClient
+from iii import IIIClient, TriggerRequest
 
 from eval.quality import score_compression
 from eval.self_correct import compress_with_retry, CompressionValidationResult
@@ -137,25 +137,25 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
                 compressed,
             )
 
-            await sdk.trigger_async({
-                "function_id": "stream::set",
-                "payload": {
+            await sdk.trigger_async(TriggerRequest(
+                function_id="stream::set",
+                payload={
                     "stream_name": STREAM.name,
                     "group_id": data.session_id,
                     "item_id": data.observation_id,
                     "data": {"type": "compressed", "observation": compressed.to_dict()},
                 }
-            })
+            ))
 
-            await sdk.trigger_async({
-                "function_id": "stream::set",
-                "payload": {
+            await sdk.trigger_async(TriggerRequest(
+                function_id="stream::set",
+                payload={
                     "stream_name": STREAM.name,
                     "group_id": STREAM.viewer_group,
                     "item_id": data.observation_id,
                     "data": {"type": "compressed", "observation": compressed.to_dict(), "session_id": data.session_id},
                 }
-            })
+            ))
 
             logger.info("Observation compressed", {
                 "obs_id": data.observation_id,
