@@ -1,13 +1,19 @@
 from dataclasses import dataclass
 import dataclasses
 import json
+from typing import Optional
+
+import numpy as np
 from iii import IIIClient, TriggerRequest
 
 from eval.quality import score_compression
 from eval.self_correct import compress_with_retry, CompressionValidationResult
-from functions.search import get_search_index
+
 from prompts.compression import COMPRESSION_SYSTEM_PROMPT, Observation, build_compression_prompt
-from schema import CompressedObservation, Model, RawObservation, MemoryProvider
+from query.bm25_index import get_bm25_index
+from query.index_persistence import IndexPersistence
+from query.vector_index import get_vector_index
+from schema import CompressedObservation, EmbeddingProvider, Model, RawObservation, MemoryProvider
 from state.kv import StateKV
 from logger import get_logger
 from state.schema import KV, STREAM
@@ -28,7 +34,7 @@ class CompressParams(Model):
     raw: RawObservation
 
 
-def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProvider):
+def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProvider, embedding_provider: Optional[EmbeddingProvider] = None, index_persistence: Optional[IndexPersistence] = None):
     async def handle_compress(raw_data: dict):
         data = CompressParams.from_dict(raw_data)
         prompt = build_compression_prompt(Observation(
@@ -129,7 +135,27 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
             logger.info(
                 f"compression_result: {parsed_json}, score: {quality_score}")
 
-            get_search_index().add(compressed)
+            get_bm25_index().add(compressed)
+
+            vector_index = get_vector_index()
+            if vector_index is not None and embedding_provider is not None:
+                try:
+                    embed_text = " ".join(filter(None, [
+                        compressed.title,
+                        compressed.subtitle,
+                        compressed.narrative,
+                        *compressed.facts,
+                        *compressed.concepts,
+                    ]))
+                    embedding = await embedding_provider.embed(embed_text)
+                    vector_index.add(compressed.id, compressed.session_id, np.array(
+                        embedding, dtype=np.float32))
+                except Exception as e:
+                    logger.warning(
+                        "vector indexing failed for obs %s: %s", data.observation_id, e)
+
+            if index_persistence is not None:
+                index_persistence.schedule_save()
 
             await kv.set(
                 KV.observations(data.session_id),

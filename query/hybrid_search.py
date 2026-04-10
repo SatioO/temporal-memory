@@ -1,10 +1,10 @@
 import asyncio
 from typing import List, Optional
+from query.bm25_index import BM25Index
+from query.vector_index import VectorIndex
 from schema import CompressedObservation, EmbeddingProvider, HybridSearchResult
 from state.kv import StateKV
 from state.schema import KV
-from state.search_index import SearchIndex
-from state.vector_index import VectorIndex
 
 RRF_K = 60
 
@@ -13,7 +13,7 @@ class HybridSearch:
     def __init__(
             self,
             kv: StateKV,
-            bm25: SearchIndex,
+            bm25: BM25Index,
             vector: Optional[VectorIndex] = None,
             embedding_provider: Optional[EmbeddingProvider] = None,
             bm25_weight: Optional[float] = 0.4,
@@ -26,11 +26,11 @@ class HybridSearch:
         self._bm25_weight = bm25_weight
         self._vector_weight = vector_weight
 
-    async def search(self, query: str, limit: int = 20) -> List[HybridSearchResult]:  # fix: was -> HybridSearchResult
+    async def search(self, query: str, limit: int = 20) -> List[HybridSearchResult]:
         bm25_results = self._bm25.search(query, limit * 2)
 
-        if not self._vector or not self._embedding_provider or self._vector.size == 0:  # fix: size is a @property, not size()
-            return await self._enrich_results(  # fix: missing await
+        if not self._vector or self._vector.size == 0:
+            return await self._enrich_results(
                 [
                     {
                         "obs_id": r.obs_id,
@@ -60,13 +60,13 @@ class HybridSearch:
 
         # Vector results — VectorIndex.search() returns plain dicts, use [] not .
         for i, r in enumerate(vector_results):
-            existing = scores.get(r["obs_id"])  # fix: was r.obs_id
+            existing = scores.get(r["obs_id"])
 
             if existing:
                 existing["vector_rank"] = i + 1
-                existing["vector_score"] = r["score"]  # fix: was r.score
+                existing["vector_score"] = r["score"]
             else:
-                scores[r["obs_id"]] = {  # fix: was r.obs_id
+                scores[r["obs_id"]] = {
                     "bm25_rank": float("inf"),
                     "vector_rank": i + 1,
                     "session_id": r["session_id"],
@@ -81,8 +81,10 @@ class HybridSearch:
                 "bm25_score": s["bm25_score"],
                 "vector_score": s["vector_score"],
                 "combined_score": (
-                    self._bm25_weight * (1 / (RRF_K + s["bm25_rank"])) +  # fix: was self.bm25_weight
-                    self._vector_weight * (1 / (RRF_K + s["vector_rank"]))  # fix: was self.vector_weight
+
+                    self._bm25_weight * (1 / (RRF_K + s["bm25_rank"])) +
+
+                    self._vector_weight * (1 / (RRF_K + s["vector_rank"]))
                 ),
             }
             for obs_id, s in scores.items()
@@ -90,23 +92,23 @@ class HybridSearch:
 
         combined.sort(key=lambda x: x["combined_score"], reverse=True)
 
-        return await self._enrich_results(combined[:limit], limit)  # fix: was self.enrich_results (missing _)
+        return await self._enrich_results(combined[:limit], limit)
 
     async def _enrich_results(
         self,
         results: List[dict],
         limit: int,
     ) -> List[HybridSearchResult]:
-        # optimisation: fetch all KV entries concurrently instead of sequentially
+
         async def fetch(r: dict) -> Optional[HybridSearchResult]:
-            obs = await self._kv.get(  # fix: was self.kv (missing _)
+            obs = await self._kv.get(
                 KV.observations(r["session_id"]),
                 r["obs_id"],
-                CompressedObservation,  # fix: was missing type arg
+                CompressedObservation,
             )
             if obs is None:
                 return None
-            return HybridSearchResult(  # fix: was a raw dict; also "sessionId" -> session_id
+            return HybridSearchResult(
                 observation=obs,
                 bm25_score=r["bm25_score"],
                 vector_score=r["vector_score"],

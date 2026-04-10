@@ -1,27 +1,14 @@
-import threading
 from dataclasses import dataclass
 from typing import List, Optional
 from iii.types import IIIClient
 from logger import get_logger
+from query.bm25_index import get_bm25_index
 from schema import CompressedObservation, Model, SearchResult, Session
 from state.kv import StateKV
 from state.schema import KV
-from state.search_index import SearchIndex
 
-search_index: Optional[SearchIndex] = None
-_lock = threading.Lock()
 
 logger = get_logger("search")
-
-
-def get_search_index() -> SearchIndex:
-    global search_index
-
-    if search_index is None:
-        with _lock:
-            search_index = SearchIndex()
-
-    return search_index
 
 
 @dataclass(frozen=True)
@@ -31,7 +18,7 @@ class SearchPayload(Model):
 
 
 async def rebuild_index(kv: StateKV) -> int:
-    idx = get_search_index()
+    idx = get_bm25_index()
     idx.clear()
 
     sessions = await kv.list(KV.sessions, Session)
@@ -57,7 +44,7 @@ def register_search_function(sdk: IIIClient, kv: StateKV):
     async def handle_search(raw_data: dict):
         data = SearchPayload.from_dict(raw_data)
 
-        idx = get_search_index(kv)
+        idx = get_bm25_index(kv)
 
         if idx.size == 0:
             count = await rebuild_index()

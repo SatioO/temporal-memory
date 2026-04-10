@@ -8,9 +8,11 @@ from config import config
 from functions.consolidation_pipeline import register_consolidation_pipeline_function
 from functions.enrich import register_enrich_function
 from logger import get_logger
-from state.hybrid_search import HybridSearch
+from query.bm25_index import get_bm25_index
+from query.index_persistence import IndexPersistence, rebuild_index
+from query.search import Search
+from query.vector_index import init_vector_index
 from state.kv import StateKV
-from state.vector_index import VectorIndex
 from triggers.api import register_api_triggers
 from providers import create_fallback_provider, create_provider
 from providers.embedding import create_embedding_provider
@@ -24,7 +26,7 @@ from functions.file_context import register_file_context_function
 from functions.observe import register_observe_function
 from functions.privacy import register_privacy_function
 from functions.remember import register_remember_function
-from functions.search import get_search_index, register_search_function
+from functions.search import register_search_function
 from functions.smart_search import register_smart_search_fn
 from functions.summarize import register_summarize_function
 from functions.timeline import register_timeline_function
@@ -75,7 +77,6 @@ def main():
 
     register_observe_function(
         sdk, kv, dedup_map, config.max_observations_per_session)
-    register_compress_function(sdk, kv, provider)
     register_context_function(sdk, kv, config.token_budget)
     register_summarize_function(sdk, kv, provider)
     register_privacy_function(sdk)
@@ -87,9 +88,10 @@ def main():
     register_enrich_function(sdk, kv)
 
     # Search functionality
-    bm25_index = get_search_index()
-    vector_index = VectorIndex() if embedding_provider != None else None
-    hybrid_search = HybridSearch(
+    bm25_index = get_bm25_index()
+    vector_index = init_vector_index(embedding_provider)
+    index_persistence = IndexPersistence(kv, bm25_index, vector_index)
+    hybrid_search = Search(
         kv,
         bm25_index,
         vector_index,
@@ -97,10 +99,43 @@ def main():
         config.bm25_weight,
         config.vector_weight
     )
+    register_compress_function(
+        sdk, kv, provider, embedding_provider, index_persistence)
     register_smart_search_fn(sdk, kv, hybrid_search.search)
+
+    async def _handle_startup(_: dict):
+        bm25_loaded, vector_loaded = await index_persistence.load()
+        if bm25_loaded and bm25_loaded.size > 0:
+            bm25_index.restore_from(bm25_loaded)
+            logger.info(
+                "[graphmind] loaded persisted BM25 index (%d docs)", bm25_index.size)
+        if vector_loaded and vector_index and vector_loaded.size > 0:
+            vector_index.restore_from(vector_loaded)
+            logger.info(
+                "[graphmind] loaded persisted vector index (%d vectors)", vector_index.size)
+        if bm25_index.size == 0:
+            count = await rebuild_index(kv, bm25_index)
+            if count > 0:
+                logger.info(
+                    "[graphmind] search index rebuilt (%d observations)", count)
+                await index_persistence.save()
+        return {}
+
+    async def _handle_save_index(_: dict):
+        await index_persistence.save()
+        return {}
+
+    sdk.register_function({"id": "mem::_startup"}, _handle_startup)
+    sdk.register_function({"id": "mem::_save-index"}, _handle_save_index)
+
+    try:
+        sdk.trigger(TriggerRequest(function_id="mem::_startup", payload={}))
+    except Exception as e:
+        logger.warning("[graphmind] failed to load persisted index: %s", e)
+
     if config.bridge_config.enabled:
         register_claude_bridge_function(sdk, kv, config.bridge_config)
-        logger.info("claude bridge → %s",
+        logger.info("[graphmind] claude bridge → %s",
                     config.bridge_config.memory_file_path)
 
     register_consolidation_pipeline_function(
@@ -123,13 +158,16 @@ def main():
                         function_id="mem::consolidate-pipeline",
                         payload={},
                     ))
-                    logger.info("auto-consolidation: completed result=%s", result)
+                    logger.info(
+                        "auto-consolidation: completed result=%s", result)
                 except Exception as err:
-                    logger.warning("auto-consolidation: trigger failed error=%s", err)
+                    logger.warning(
+                        "auto-consolidation: trigger failed error=%s", err)
 
         threading.Thread(target=_auto_consolidate, daemon=True,
                          name="auto-consolidation").start()
-        logger.info("auto-consolidation: enabled (every %dm)", consolidation_interval_s // 60)
+        logger.info("auto-consolidation: enabled (every %dm)",
+                    consolidation_interval_s // 60)
 
     def shutdown(*_):
         # Reset to default immediately so a second Ctrl+C force-kills
@@ -144,7 +182,12 @@ def main():
 
     # Cleanup runs on main thread after unblocking — never inside the signal handler
     logger.info("shutting down")
+    index_persistence.stop()
     dedup_map.stop()
+    try:
+        sdk.trigger(TriggerRequest(function_id="mem::_save-index", payload={}))
+    except Exception as e:
+        logger.warning("failed to save index on shutdown: %s", e)
     sdk.shutdown()
 
 

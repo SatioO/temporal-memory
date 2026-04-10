@@ -74,6 +74,5 @@ async def _find_observation(
         except Exception:
             return None
 
-    # probe all sessions concurrently instead of sequentially
     results = await asyncio.gather(*[try_session(s) for s in sessions])
     return next((r for r in results if r is not None), None)

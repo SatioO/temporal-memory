@@ -28,6 +28,7 @@ class KV:
     semantic = "mem:semantic"
     procedural = "mem:procedural"
     claude_bridge = "mem:claude-bridge"
+    bm25_index = "mem:bm25-index"
 
     @staticmethod
     def observations(session_id: str) -> str:

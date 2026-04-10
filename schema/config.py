@@ -57,18 +57,18 @@ def _clamp(value: float, lo: float, hi: float, fallback: float) -> float:
 
 def _detect_provider() -> tuple[ProviderType, str]:
     if os.getenv("ANTHROPIC_API_KEY"):
-        return "anthropic", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        return "anthropic", os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 
     if os.getenv("OPENAI_API_KEY"):
         return "openai", os.getenv("OPENAI_MODEL", "gpt-4.1-nano")
 
     if os.getenv("GEMINI_API_KEY"):
-        return "gemini", os.getenv("GEMINI_MODEL", "gemini-3.0-flash")
+        return "gemini", os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
 
     if os.getenv("OPENROUTER_API_KEY"):
         return "openrouter", os.getenv("OPENROUTER_MODEL", "minimax/minimax-m2.5:free")
 
-    return "agent-sdk", "claude-sonnet-4-20250514"
+    return "agent-sdk", "claude-haiku-4-5-20251001"
 
 
 def _detect_embedding_provider() -> Optional[str]:
