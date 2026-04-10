@@ -242,6 +242,7 @@ class CompactSearchResult(Model):
     obs_id: str
     session_id: str
     title: str
+    type: ObservationType
     score: float
     timestamp: str
 
