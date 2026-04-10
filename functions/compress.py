@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 import dataclasses
 import json
@@ -137,8 +138,10 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
 
             get_bm25_index().add(compressed)
 
-            vector_index = get_vector_index()
-            if vector_index is not None and embedding_provider is not None:
+            async def do_vector_index():
+                vector_index = get_vector_index()
+                if vector_index is None or embedding_provider is None:
+                    return
                 try:
                     embed_text = " ".join(filter(None, [
                         compressed.title,
@@ -150,38 +153,40 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
                     embedding = await embedding_provider.embed(embed_text)
                     vector_index.add(compressed.id, compressed.session_id, np.array(
                         embedding, dtype=np.float32))
+                    logger.info("vector indexed obs=%s, total=%d",
+                                compressed.id, vector_index.size)
                 except Exception as e:
                     logger.warning(
                         "vector indexing failed for obs %s: %s", data.observation_id, e)
 
+            await asyncio.gather(
+                kv.set(KV.observations(data.session_id), data.observation_id, compressed),
+                do_vector_index(),
+            )
+
             if index_persistence is not None:
                 index_persistence.schedule_save()
 
-            await kv.set(
-                KV.observations(data.session_id),
-                data.observation_id,
-                compressed,
+            await asyncio.gather(
+                sdk.trigger_async(TriggerRequest(
+                    function_id="stream::set",
+                    payload={
+                        "stream_name": STREAM.name,
+                        "group_id": data.session_id,
+                        "item_id": data.observation_id,
+                        "data": {"type": "compressed", "observation": compressed.to_dict()},
+                    }
+                )),
+                sdk.trigger_async(TriggerRequest(
+                    function_id="stream::set",
+                    payload={
+                        "stream_name": STREAM.name,
+                        "group_id": STREAM.viewer_group,
+                        "item_id": data.observation_id,
+                        "data": {"type": "compressed", "observation": compressed.to_dict(), "session_id": data.session_id},
+                    }
+                )),
             )
-
-            await sdk.trigger_async(TriggerRequest(
-                function_id="stream::set",
-                payload={
-                    "stream_name": STREAM.name,
-                    "group_id": data.session_id,
-                    "item_id": data.observation_id,
-                    "data": {"type": "compressed", "observation": compressed.to_dict()},
-                }
-            ))
-
-            await sdk.trigger_async(TriggerRequest(
-                function_id="stream::set",
-                payload={
-                    "stream_name": STREAM.name,
-                    "group_id": STREAM.viewer_group,
-                    "item_id": data.observation_id,
-                    "data": {"type": "compressed", "observation": compressed.to_dict(), "session_id": data.session_id},
-                }
-            ))
 
             logger.info("Observation compressed", {
                 "obs_id": data.observation_id,

@@ -43,7 +43,7 @@ async def compress_with_retry(
     if result.valid:
         return CompressionResult(response=first, retried=False)
 
-    for _ in range(max_retries + 1):
+    for _ in range(max_retries):
         retry = await provider.compress(
             system_prompt + f"\n\n {STRICT_PROMPT}", user_prompt)
         retry_result = validator(retry)
@@ -67,7 +67,7 @@ async def summarize_with_retry(
     if result.valid:
         return SummarizationResult(response=first, retried=False)
 
-    for _ in range(max_retries + 1):
+    for _ in range(max_retries):
         retry = await provider.summarize(
             system_prompt + f"\n\n {STRICT_PROMPT}", user_prompt)
         retry_result = validator(retry)

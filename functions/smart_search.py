@@ -1,8 +1,9 @@
 import asyncio
-from typing import Awaitable, Callable, List, Optional
+from dataclasses import dataclass
+from typing import Any, Awaitable, Callable, List, Optional
 from iii import IIIClient
 from logger import get_logger
-from schema import CompactSearchResult, CompressedObservation, HybridSearchResult, Session
+from schema import CompactSearchResult, CompressedObservation, HybridSearchResult, Model, Session
 from state.kv import StateKV
 from state.schema import KV
 
@@ -10,6 +11,13 @@ logger = get_logger("smart_search")
 
 _EXPAND_CAP = 20
 _MAX_LIMIT = 100
+
+
+@dataclass(frozen=True)
+class SmartSearchPayload(Model):
+    query: Optional[str] = None
+    expand_ids: Optional[List[Any]] = None
+    limit: Optional[int] = None
 
 
 def register_smart_search_fn(

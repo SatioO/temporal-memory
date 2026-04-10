@@ -130,14 +130,20 @@ def register_observe_function(sdk: IIIClient, kv: StateKV, dedup_map: Optional[D
                         session, observation_count=session.observation_count + 1)
                 )
 
-            asyncio.create_task(sdk.trigger_async(TriggerRequest(
-                function_id="mem::compress",
-                payload={
-                    "observation_id": obs_id,
-                    "session_id": payload.session_id,
-                    "raw": raw.to_dict(),
-                },
-            )))
+            async def _compress_safe():
+                try:
+                    await sdk.trigger_async(TriggerRequest(
+                        function_id="mem::compress",
+                        payload={
+                            "observation_id": obs_id,
+                            "session_id": payload.session_id,
+                            "raw": raw.to_dict(),
+                        },
+                    ))
+                except Exception as e:
+                    logger.warning("compress fire-and-forget failed obs_id=%s: %s", obs_id, e)
+
+            asyncio.create_task(_compress_safe())
 
             logger.debug("observation captured obs_id=%s session_id=%s hook=%s",
                          obs_id, payload.session_id, payload.hook_type)

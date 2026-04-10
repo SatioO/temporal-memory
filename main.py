@@ -1,3 +1,4 @@
+import asyncio
 import signal
 import threading
 import http.server
@@ -90,7 +91,7 @@ def main():
     # Search functionality
     bm25_index = get_bm25_index()
     vector_index = init_vector_index(embedding_provider)
-    index_persistence = IndexPersistence(kv, bm25_index, vector_index)
+    index_persistence = IndexPersistence(bm25_index, vector_index, config.data_dir)
     hybrid_search = Search(
         kv,
         bm25_index,
@@ -103,35 +104,23 @@ def main():
         sdk, kv, provider, embedding_provider, index_persistence)
     register_smart_search_fn(sdk, kv, hybrid_search.search)
 
-    async def _handle_startup(_: dict):
-        bm25_loaded, vector_loaded = await index_persistence.load()
-        if bm25_loaded and bm25_loaded.size > 0:
-            bm25_index.restore_from(bm25_loaded)
-            logger.info(
-                "[graphmind] loaded persisted BM25 index (%d docs)", bm25_index.size)
-        if vector_loaded and vector_index and vector_loaded.size > 0:
-            vector_index.restore_from(vector_loaded)
-            logger.info(
-                "[graphmind] loaded persisted vector index (%d vectors)", vector_index.size)
-        if bm25_index.size == 0:
-            count = await rebuild_index(kv, bm25_index)
+    bm25_loaded, vector_loaded = index_persistence.load()
+    if bm25_loaded and bm25_loaded.size > 0:
+        bm25_index.restore_from(bm25_loaded)
+        logger.info("[graphmind] loaded persisted BM25 index (%d docs)", bm25_index.size)
+    if vector_loaded and vector_index and vector_loaded.size > 0:
+        vector_index.restore_from(vector_loaded)
+        logger.info("[graphmind] loaded persisted vector index (%d vectors)", vector_index.size)
+    if bm25_index.size == 0:
+        try:
+            count = asyncio.run_coroutine_threadsafe(
+                rebuild_index(kv, bm25_index), sdk._loop
+            ).result(timeout=30)
             if count > 0:
-                logger.info(
-                    "[graphmind] search index rebuilt (%d observations)", count)
-                await index_persistence.save()
-        return {}
-
-    async def _handle_save_index(_: dict):
-        await index_persistence.save()
-        return {}
-
-    sdk.register_function({"id": "mem::_startup"}, _handle_startup)
-    sdk.register_function({"id": "mem::_save-index"}, _handle_save_index)
-
-    try:
-        sdk.trigger(TriggerRequest(function_id="mem::_startup", payload={}))
-    except Exception as e:
-        logger.warning("[graphmind] failed to load persisted index: %s", e)
+                logger.info("[graphmind] search index rebuilt (%d observations)", count)
+                index_persistence.save()
+        except Exception as e:
+            logger.warning("[graphmind] failed to rebuild search index: %s", e)
 
     if config.bridge_config.enabled:
         register_claude_bridge_function(sdk, kv, config.bridge_config)
@@ -184,10 +173,7 @@ def main():
     logger.info("shutting down")
     index_persistence.stop()
     dedup_map.stop()
-    try:
-        sdk.trigger(TriggerRequest(function_id="mem::_save-index", payload={}))
-    except Exception as e:
-        logger.warning("failed to save index on shutdown: %s", e)
+    index_persistence.save()
     sdk.shutdown()
 
 
