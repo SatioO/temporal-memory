@@ -66,7 +66,7 @@ def _detect_provider() -> tuple[ProviderType, str]:
         return "gemini", os.getenv("GEMINI_MODEL", "gemini-3.0-flash")
 
     if os.getenv("OPENROUTER_API_KEY"):
-        return "openrouter", os.getenv("OPENROUTER_MODEL", "minimax/minimax-m2.5")
+        return "openrouter", os.getenv("OPENROUTER_MODEL", "minimax/minimax-m2.5:free")
 
     return "agent-sdk", "claude-sonnet-4-20250514"
 
@@ -259,7 +259,8 @@ class AppConfig:
         bridge_enabled = os.getenv(
             "CLAUDE_MEMORY_BRIDGE", "false").lower() == "true"
         project_path = os.getenv("CLAUDE_PROJECT_PATH") or os.getcwd()
-        memory_file_path = _build_memory_path(project_path) if bridge_enabled else ""
+        memory_file_path = _build_memory_path(
+            project_path) if bridge_enabled else ""
 
         consolidation_enabled = os.getenv(
             "CONSOLIDATION_ENABLED", "false").lower() == "true"

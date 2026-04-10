@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
+from shared import REST_URL, fetch, log, auth_headers, read_json_stdin
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from shared import REST_URL, fetch, log, auth_headers, read_json_stdin
 
 
 def main() -> None:
@@ -18,7 +18,7 @@ def main() -> None:
             method="POST",
             headers=auth_headers(),
             body={"session_id": session_id},
-            timeout=5,
+            timeout=10,
         )
 
     except Exception as err:

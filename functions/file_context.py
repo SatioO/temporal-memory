@@ -1,3 +1,4 @@
+import asyncio
 import re
 from dataclasses import dataclass
 from iii.types import IIIClient
@@ -31,57 +32,61 @@ def register_file_context_function(sdk: IIIClient, kv: StateKV):
     async def handle_file_context(raw_data: FileContextPayload):
         data = FileContextPayload.from_dict(raw_data)
 
+        sessions = await kv.list(KV.sessions, Session)
+        other_sessions = sorted(
+            [s for s in sessions if s.id != data.session_id],
+            key=lambda s: s.started_at,
+            reverse=True,
+        )[:15]
+
+        # Fetch all session observations in parallel
+        all_obs_lists: list[list[CompressedObservation]] = await asyncio.gather(
+            *[kv.list(KV.observations(s.id), CompressedObservation) for s in other_sessions]
+        )
+
+        # Build a flat list of (session_id, obs) for relevant observations only
+        candidate_obs = [
+            (session.id, obs)
+            for session, obs_list in zip(other_sessions, all_obs_lists)
+            for obs in obs_list
+            if obs.files and obs.title and obs.importance >= 4
+        ]
+
         results: list[FileHistory] = []
 
-        sessions = await kv.list(KV.sessions, Session)
-
-        other_sessions = sorted([s for s in sessions if s.id != data.session_id],
-                                key=lambda d: d.started_at, reverse=True)[:15]
-
         for file in data.files:
+            normalized_file = re.sub(r"^\./", "", file)
             history = FileHistory(file=file, observations=[])
 
-            normalized_file = re.sub(r"^\./", "", file)
+            for session_id, obs in candidate_obs:
+                matches = any(
+                    f == file
+                    or f == normalized_file
+                    or f.endswith(f"/{normalized_file}")
+                    or normalized_file.endswith(f"/{f}")
+                    for f in obs.files
+                )
+                if matches:
+                    history.observations.append(Observation(
+                        session_id=session_id,
+                        obs_id=obs.id,
+                        type=obs.type,
+                        title=obs.title,
+                        narrative=obs.narrative,
+                        importance=obs.importance,
+                        timestamp=obs.timestamp,
+                    ))
 
-            for session in other_sessions:
-                observations = await kv.list(KV.observations(
-                    session.id), CompressedObservation)
-
-                for obs in observations:
-                    if not (obs.files or obs.title):
-                        continue
-
-                    matches = any(
-                        f == file
-                        or f == normalized_file
-                        or f.endswith(f"/{normalized_file}")
-                        or normalized_file.endswith(f"/{f}")
-                        for f in obs.files
-                    )
-
-                    if matches and obs.importance >= 4:
-                        history.observations.append(Observation(
-                            session_id=session.id,
-                            obs_id=obs.id,
-                            type=obs.type,
-                            title=obs.title,
-                            narrative=obs.narrative,
-                            importance=obs.importance,
-                            timestamp=obs.timestamp,
-                        ))
-
-            history.observations.sort(
-                key=lambda x: x.importance, reverse=True)
+            history.observations.sort(key=lambda x: x.importance, reverse=True)
             history.observations = history.observations[:5]
 
-            if len(history.observations) > 0:
+            if history.observations:
                 results.append(history)
 
-        if len(results) == 0:
+        if not results:
             return {"context": ""}
 
         lines = ["# Agent File Context"]
-
         for fh in results:
             lines.append(f"## {fh.file}")
             for obs in fh.observations:
@@ -92,7 +97,7 @@ def register_file_context_function(sdk: IIIClient, kv: StateKV):
         logger.info(
             "File context generated (files: %s, results: %s)",
             len(data.files),
-            len(results)
+            len(results),
         )
 
         return {"context": context}
