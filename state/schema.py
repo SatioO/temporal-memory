@@ -30,6 +30,8 @@ class KV:
     claude_bridge = "mem:claude-bridge"
     bm25_index = "mem:index:bm25"
     vector_index = "mem:index:vector"
+    graph_nodes = "mem:graph:nodes"
+    graph_edges = "mem:graph:edges"
 
     @staticmethod
     def observations(session_id: str) -> str:

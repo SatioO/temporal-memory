@@ -41,16 +41,27 @@ class IndexPersistence:
             self._task.cancel()
         self._task = None
 
-        try:
-            await self._kv.set(KV.bm25_index, "data", self._bm25.serialize())
-        except Exception as e:
-            logger.warning("failed to save BM25 index: %s", e)
-
-        if self._vector and self._vector.size > 0:
+        async def _save_bm25() -> None:
             try:
-                await self._kv.set(KV.vector_index, "data", self._vector.serialize())
+                await asyncio.wait_for(
+                    self._kv.set(KV.bm25_index, "data", self._bm25.serialize()),
+                    timeout=20.0,
+                )
+            except Exception as e:
+                logger.warning("failed to save BM25 index: %s", e)
+
+        async def _save_vector() -> None:
+            if not self._vector or self._vector.size == 0:
+                return
+            try:
+                await asyncio.wait_for(
+                    self._kv.set(KV.vector_index, "data", self._vector.serialize()),
+                    timeout=20.0,
+                )
             except Exception as e:
                 logger.warning("failed to save vector index: %s", e)
+
+        await asyncio.gather(_save_bm25(), _save_vector())
 
         logger.info(
             "index persisted (bm25=%d docs, vectors=%d)",

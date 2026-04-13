@@ -15,15 +15,6 @@ def main() -> None:
         return
 
     session_id = hook_input.get("session_id", "unknown")
-    # Read full transcript
-    transcript_path = hook_input.get("transcript_path", "")
-    all_messages = read_transcript(transcript_path)
-    if not all_messages:
-        log(f"No messages in transcript {transcript_path}, skipping retain")
-        return
-
-    log(f"Read {len(all_messages)} messages from transcript")
-    log(all_messages)
 
     try:
         fetch(

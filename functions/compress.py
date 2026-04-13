@@ -160,33 +160,34 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
                         "vector indexing failed for obs %s: %s", data.observation_id, e)
 
             await asyncio.gather(
-                kv.set(KV.observations(data.session_id), data.observation_id, compressed.to_dict()),
+                kv.set(KV.observations(data.session_id),
+                       data.observation_id, compressed.to_dict()),
                 do_vector_index(),
             )
 
             if index_persistence is not None:
                 index_persistence.schedule_save()
 
-            await asyncio.gather(
-                sdk.trigger_async(TriggerRequest(
-                    function_id="stream::set",
-                    payload={
-                        "stream_name": STREAM.name,
-                        "group_id": data.session_id,
-                        "item_id": data.observation_id,
-                        "data": {"type": "compressed", "observation": compressed.to_dict()},
-                    }
-                )),
-                sdk.trigger_async(TriggerRequest(
-                    function_id="stream::set",
-                    payload={
-                        "stream_name": STREAM.name,
-                        "group_id": STREAM.viewer_group,
-                        "item_id": data.observation_id,
-                        "data": {"type": "compressed", "observation": compressed.to_dict(), "session_id": data.session_id},
-                    }
-                )),
-            )
+            # await asyncio.gather(
+            #     sdk.trigger_async(TriggerRequest(
+            #         function_id="stream::set",
+            #         payload={
+            #             "stream_name": STREAM.name,
+            #             "group_id": data.session_id,
+            #             "item_id": data.observation_id,
+            #             "data": {"type": "compressed", "observation": compressed.to_dict()},
+            #         }
+            #     )),
+            #     sdk.trigger_async(TriggerRequest(
+            #         function_id="stream::set",
+            #         payload={
+            #             "stream_name": STREAM.name,
+            #             "group_id": STREAM.viewer_group,
+            #             "item_id": data.observation_id,
+            #             "data": {"type": "compressed", "observation": compressed.to_dict(), "session_id": data.session_id},
+            #         }
+            #     )),
+            # )
 
             logger.info("Observation compressed", {
                 "obs_id": data.observation_id,

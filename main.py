@@ -31,6 +31,7 @@ from functions.search import register_search_function
 from functions.smart_search import register_smart_search_fn
 from functions.summarize import register_summarize_function
 from functions.timeline import register_timeline_function
+from functions.graph import register_graph_function
 
 logger = get_logger("main")
 
@@ -87,6 +88,7 @@ def main():
     register_timeline_function(sdk, kv)
     register_auto_forget_function(sdk, kv)
     register_enrich_function(sdk, kv)
+    register_graph_function(sdk, kv)
 
     # Search functionality
     bm25_index = get_bm25_index()
@@ -177,9 +179,12 @@ def main():
     logger.info("shutting down")
     index_persistence.stop()
     dedup_map.stop()
-    asyncio.run_coroutine_threadsafe(
-        index_persistence.save(), sdk._loop
-    ).result(timeout=10)
+    try:
+        asyncio.run_coroutine_threadsafe(
+            index_persistence.save(), sdk._loop
+        ).result(timeout=30)
+    except TimeoutError:
+        logger.warning("index save timed out on shutdown; in-flight data may not be persisted")
     sdk.shutdown()
 
 
