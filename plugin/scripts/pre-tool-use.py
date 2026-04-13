@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 
 def main() -> None:
-    log("[graphmind] PreToolUse hook triggered ✓")
+    log("PreToolUse hook triggered ✓")
 
     data = read_json_stdin() or {}
 
@@ -55,7 +55,7 @@ def main() -> None:
                 "terms": terms,
                 "tool_name": tool_name
             },
-            timeout=5,
+            timeout=10,
         )
 
         if is_ok(res):
@@ -71,7 +71,7 @@ def main() -> None:
             })
 
     except Exception as err:
-        log(f"[graphmind] API call failed: {err}")
+        log(f"API call failed: {err}")
 
 
 if __name__ == "__main__":

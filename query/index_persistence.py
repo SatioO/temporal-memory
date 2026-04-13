@@ -1,5 +1,4 @@
 import asyncio
-import os
 from typing import Optional, Tuple
 
 from query.bm25_index import BM25Index
@@ -12,8 +11,6 @@ from logger import get_logger
 logger = get_logger("index_persistence")
 
 DEBOUNCE_S = 5.0
-_BM25_FILE = "bm25_index.json"
-_VECTOR_FILE = "vector_index.json"
 
 
 class IndexPersistence:
@@ -21,11 +18,11 @@ class IndexPersistence:
         self,
         bm25: BM25Index,
         vector: Optional[VectorIndex],
-        data_dir: str,
+        kv: StateKV,
     ):
         self._bm25 = bm25
         self._vector = vector
-        self._data_dir = data_dir
+        self._kv = kv
         self._task: Optional[asyncio.Task] = None
 
     def schedule_save(self) -> None:
@@ -36,26 +33,22 @@ class IndexPersistence:
 
     async def _delayed_save(self) -> None:
         await asyncio.sleep(DEBOUNCE_S)
-        self.save()
+        await self.save()
 
-    def save(self) -> None:
-        """Flush both indexes to disk immediately, cancelling any pending debounce."""
+    async def save(self) -> None:
+        """Flush both indexes to KV immediately, cancelling any pending debounce."""
         if self._task and not self._task.done():
             self._task.cancel()
         self._task = None
 
-        os.makedirs(self._data_dir, exist_ok=True)
-
         try:
-            with open(os.path.join(self._data_dir, _BM25_FILE), "w") as f:
-                f.write(self._bm25.serialize())
+            await self._kv.set(KV.bm25_index, "data", self._bm25.serialize())
         except Exception as e:
             logger.warning("failed to save BM25 index: %s", e)
 
         if self._vector and self._vector.size > 0:
             try:
-                with open(os.path.join(self._data_dir, _VECTOR_FILE), "w") as f:
-                    f.write(self._vector.serialize())
+                await self._kv.set(KV.vector_index, "data", self._vector.serialize())
             except Exception as e:
                 logger.warning("failed to save vector index: %s", e)
 
@@ -65,24 +58,22 @@ class IndexPersistence:
             self._vector.size if self._vector else 0,
         )
 
-    def load(self) -> Tuple[Optional[BM25Index], Optional[VectorIndex]]:
-        """Load both indexes from disk. Returns (None, None) on miss."""
+    async def load(self) -> Tuple[Optional[BM25Index], Optional[VectorIndex]]:
+        """Load both indexes from KV. Returns (None, None) on miss."""
         bm25: Optional[BM25Index] = None
         vector: Optional[VectorIndex] = None
 
         try:
-            with open(os.path.join(self._data_dir, _BM25_FILE)) as f:
-                bm25 = BM25Index.deserialize(f.read())
-        except FileNotFoundError:
-            pass
+            data = await self._kv.get(KV.bm25_index, "data", str)
+            if data is not None:
+                bm25 = BM25Index.deserialize(data)
         except Exception as e:
             logger.warning("failed to load BM25 index: %s", e)
 
         try:
-            with open(os.path.join(self._data_dir, _VECTOR_FILE)) as f:
-                vector = VectorIndex.deserialize(f.read())
-        except FileNotFoundError:
-            pass
+            data = await self._kv.get(KV.vector_index, "data", str)
+            if data is not None:
+                vector = VectorIndex.deserialize(data)
         except Exception as e:
             logger.warning("failed to load vector index: %s", e)
 

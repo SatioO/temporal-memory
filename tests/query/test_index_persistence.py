@@ -1,7 +1,6 @@
 import asyncio
-import os
 from typing import Optional
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
@@ -15,7 +14,7 @@ from state.schema import KV
 
 
 # ---------------------------------------------------------------------------
-# MockKV (for rebuild_index tests only)
+# MockKV
 # ---------------------------------------------------------------------------
 
 class MockKV:
@@ -72,11 +71,6 @@ def vec(*values: float) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def data_dir(tmp_path) -> str:
-    return str(tmp_path)
-
-
-@pytest.fixture
 def bm25() -> BM25Index:
     return BM25Index()
 
@@ -95,24 +89,26 @@ def kv() -> MockKV:
 # save / load — BM25
 # ---------------------------------------------------------------------------
 
-def test_save_load_bm25_round_trip(data_dir, bm25):
+@pytest.mark.asyncio
+async def test_save_load_bm25_round_trip(kv, bm25):
     bm25.add(make_obs(id="obs_1", title="auth handler redis"))
-    persistence = IndexPersistence(bm25, None, data_dir)
-    persistence.save()
+    persistence = IndexPersistence(bm25, None, kv)
+    await persistence.save()
 
-    bm25_loaded, _ = persistence.load()
+    bm25_loaded, _ = await persistence.load()
     assert bm25_loaded is not None
     assert bm25_loaded.size == 1
     assert len(bm25_loaded.search("auth")) == 1
 
 
-def test_save_load_bm25_multiple_docs(data_dir, bm25):
+@pytest.mark.asyncio
+async def test_save_load_bm25_multiple_docs(kv, bm25):
     bm25.add(make_obs(id="obs_1", title="auth middleware"))
     bm25.add(make_obs(id="obs_2", title="redis cache layer"))
-    persistence = IndexPersistence(bm25, None, data_dir)
-    persistence.save()
+    persistence = IndexPersistence(bm25, None, kv)
+    await persistence.save()
 
-    bm25_loaded, _ = persistence.load()
+    bm25_loaded, _ = await persistence.load()
     assert bm25_loaded.size == 2
 
 
@@ -120,24 +116,26 @@ def test_save_load_bm25_multiple_docs(data_dir, bm25):
 # save / load — vector
 # ---------------------------------------------------------------------------
 
-def test_save_load_vector_round_trip(data_dir, bm25, vector):
+@pytest.mark.asyncio
+async def test_save_load_vector_round_trip(kv, bm25, vector):
     vector.add("obs_1", "ses_1", vec(1, 0, 0))
-    persistence = IndexPersistence(bm25, vector, data_dir)
-    persistence.save()
+    persistence = IndexPersistence(bm25, vector, kv)
+    await persistence.save()
 
-    _, vector_loaded = persistence.load()
+    _, vector_loaded = await persistence.load()
     assert vector_loaded is not None
     assert vector_loaded.size == 1
     results = vector_loaded.search(vec(1, 0, 0), limit=1)
     assert results[0]["obs_id"] == "obs_1"
 
 
-def test_empty_vector_index_not_saved(data_dir, bm25, vector):
-    # vector.size == 0 → should not write vector file
-    persistence = IndexPersistence(bm25, vector, data_dir)
-    persistence.save()
+@pytest.mark.asyncio
+async def test_empty_vector_index_not_saved(kv, bm25, vector):
+    # vector.size == 0 → should not write vector key
+    persistence = IndexPersistence(bm25, vector, kv)
+    await persistence.save()
 
-    _, vector_loaded = persistence.load()
+    _, vector_loaded = await persistence.load()
     assert vector_loaded is None
 
 
@@ -145,23 +143,22 @@ def test_empty_vector_index_not_saved(data_dir, bm25, vector):
 # load — nothing saved
 # ---------------------------------------------------------------------------
 
-def test_load_returns_none_when_nothing_saved(data_dir, bm25):
-    persistence = IndexPersistence(bm25, None, data_dir)
-    bm25_loaded, vector_loaded = persistence.load()
+@pytest.mark.asyncio
+async def test_load_returns_none_when_nothing_saved(kv, bm25):
+    persistence = IndexPersistence(bm25, None, kv)
+    bm25_loaded, vector_loaded = await persistence.load()
     assert bm25_loaded is None
     assert vector_loaded is None
 
 
-def test_load_bm25_none_when_only_vector_file_exists(data_dir, bm25, vector):
+@pytest.mark.asyncio
+async def test_load_bm25_none_when_only_vector_key_exists(kv, bm25, vector):
     vector.add("obs_1", "ses_1", vec(1, 0, 0))
-    # manually write only the vector file
-    import json
-    os.makedirs(data_dir, exist_ok=True)
-    with open(os.path.join(data_dir, "vector_index.json"), "w") as f:
-        f.write(vector.serialize())
+    # manually set only the vector key in KV
+    await kv.set(KV.vector_index, "data", vector.serialize())
 
-    persistence = IndexPersistence(bm25, vector, data_dir)
-    bm25_loaded, vector_loaded = persistence.load()
+    persistence = IndexPersistence(bm25, vector, kv)
+    bm25_loaded, vector_loaded = await persistence.load()
     assert bm25_loaded is None
     assert vector_loaded is not None
 
@@ -171,30 +168,30 @@ def test_load_bm25_none_when_only_vector_file_exists(data_dir, bm25, vector):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_schedule_save_saves_after_debounce(data_dir, bm25):
+async def test_schedule_save_saves_after_debounce(kv, bm25):
     bm25.add(make_obs(id="obs_1"))
-    persistence = IndexPersistence(bm25, None, data_dir)
+    persistence = IndexPersistence(bm25, None, kv)
 
     with patch("query.index_persistence.DEBOUNCE_S", 0.02):
         persistence.schedule_save()
-        assert not os.path.exists(os.path.join(data_dir, "bm25_index.json"))
+        assert await kv.get(KV.bm25_index, "data", str) is None
         await asyncio.sleep(0.05)
 
-    assert os.path.exists(os.path.join(data_dir, "bm25_index.json"))
+    assert await kv.get(KV.bm25_index, "data", str) is not None
 
 
 @pytest.mark.asyncio
-async def test_schedule_save_debounces_multiple_calls(data_dir, bm25):
+async def test_schedule_save_debounces_multiple_calls(kv, bm25):
     bm25.add(make_obs(id="obs_1"))
-    persistence = IndexPersistence(bm25, None, data_dir)
+    persistence = IndexPersistence(bm25, None, kv)
 
     save_count = 0
     original_save = persistence.save
 
-    def counting_save():
+    async def counting_save():
         nonlocal save_count
         save_count += 1
-        original_save()
+        await original_save()
 
     persistence.save = counting_save  # type: ignore[method-assign]
 
@@ -212,20 +209,20 @@ async def test_schedule_save_debounces_multiple_calls(data_dir, bm25):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_stop_cancels_pending_save(data_dir, bm25):
+async def test_stop_cancels_pending_save(kv, bm25):
     bm25.add(make_obs(id="obs_1"))
-    persistence = IndexPersistence(bm25, None, data_dir)
+    persistence = IndexPersistence(bm25, None, kv)
 
     with patch("query.index_persistence.DEBOUNCE_S", 0.02):
         persistence.schedule_save()
         persistence.stop()
         await asyncio.sleep(0.05)
 
-    assert not os.path.exists(os.path.join(data_dir, "bm25_index.json"))
+    assert await kv.get(KV.bm25_index, "data", str) is None
 
 
-def test_stop_is_idempotent_when_no_task(data_dir, bm25):
-    persistence = IndexPersistence(bm25, None, data_dir)
+def test_stop_is_idempotent_when_no_task(kv, bm25):
+    persistence = IndexPersistence(bm25, None, kv)
     persistence.stop()
     persistence.stop()
 
@@ -235,13 +232,13 @@ def test_stop_is_idempotent_when_no_task(data_dir, bm25):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_save_cancels_pending_debounce(data_dir, bm25):
+async def test_save_cancels_pending_debounce(kv, bm25):
     bm25.add(make_obs(id="obs_1"))
-    persistence = IndexPersistence(bm25, None, data_dir)
+    persistence = IndexPersistence(bm25, None, kv)
 
     with patch("query.index_persistence.DEBOUNCE_S", 10.0):
         persistence.schedule_save()
-        persistence.save()  # immediate flush
+        await persistence.save()  # immediate flush
 
     assert persistence._task is None
 

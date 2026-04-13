@@ -91,7 +91,7 @@ def main():
     # Search functionality
     bm25_index = get_bm25_index()
     vector_index = init_vector_index(embedding_provider)
-    index_persistence = IndexPersistence(bm25_index, vector_index, config.data_dir)
+    index_persistence = IndexPersistence(bm25_index, vector_index, kv)
     hybrid_search = Search(
         kv,
         bm25_index,
@@ -104,7 +104,9 @@ def main():
         sdk, kv, provider, embedding_provider, index_persistence)
     register_smart_search_fn(sdk, kv, hybrid_search.search)
 
-    bm25_loaded, vector_loaded = index_persistence.load()
+    bm25_loaded, vector_loaded = asyncio.run_coroutine_threadsafe(
+        index_persistence.load(), sdk._loop
+    ).result(timeout=30)
     if bm25_loaded and bm25_loaded.size > 0:
         bm25_index.restore_from(bm25_loaded)
         logger.info("[graphmind] loaded persisted BM25 index (%d docs)", bm25_index.size)
@@ -118,7 +120,9 @@ def main():
             ).result(timeout=30)
             if count > 0:
                 logger.info("[graphmind] search index rebuilt (%d observations)", count)
-                index_persistence.save()
+                asyncio.run_coroutine_threadsafe(
+                    index_persistence.save(), sdk._loop
+                ).result(timeout=10)
         except Exception as e:
             logger.warning("[graphmind] failed to rebuild search index: %s", e)
 
@@ -173,7 +177,9 @@ def main():
     logger.info("shutting down")
     index_persistence.stop()
     dedup_map.stop()
-    index_persistence.save()
+    asyncio.run_coroutine_threadsafe(
+        index_persistence.save(), sdk._loop
+    ).result(timeout=10)
     sdk.shutdown()
 
 

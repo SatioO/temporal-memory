@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
+from shared import REST_URL, fetch, log, auth_headers, read_json_stdin, is_ok
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from shared import REST_URL, fetch, log, auth_headers, read_json_stdin, is_ok
 
 
 def main() -> None:
-    log("[graphmind] SessionStart hook triggered ✓")
+    log("SessionStart hook triggered ✓")
 
-    data = read_json_stdin() or {}
-    session_id = data.get("session_id") or "unknown"
-    project = data.get("cwd") or os.getcwd()
+    hook_input = read_json_stdin()
+    if hook_input is None:
+        log(f"API call failed hook_input: {hook_input}")
+        return
 
-    log(f"[graphmind] SessionStart hook: session_id={session_id}, cwd={project}")
+    session_id = hook_input.get("session_id", "unknown")
+    project = hook_input.get("cwd", os.getcwd())
+
+    log(
+        f"SessionStart hook: session_id={session_id}, cwd={project}")
 
     try:
         res = fetch(
@@ -41,7 +46,7 @@ def main() -> None:
             })
 
     except Exception as err:
-        log(f"[graphmind] Claude bridge sync failed: {err}")
+        log(f"Claude bridge sync failed: {err}")
 
 
 if __name__ == "__main__":

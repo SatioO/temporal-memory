@@ -68,15 +68,16 @@ def read_json_stdin() -> Optional[Dict[str, Any]]:
         return None
     try:
         return json.load(sys.stdin)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, EOFError):
+        print("[graphmind] Failed to read hook input", file=sys.stderr)
         return None
 
 
 def log(msg: Any) -> None:
     if isinstance(msg, (dict, list)):
-        print(json.dumps(msg, ensure_ascii=False))
+        print(f"[graphmind] {json.dumps(msg, ensure_ascii=False)}")
     else:
-        print(msg)
+        print(f"[graphmind] {msg}")
 
 
 def auth_headers() -> Dict[str, str]:
@@ -88,3 +89,44 @@ def auth_headers() -> Dict[str, str]:
 
 def is_ok(res: Dict[str, Any]) -> bool:
     return 200 <= res.get("status", 0) < 300
+
+
+def read_transcript(transcript_path: str) -> list:
+    """Read a JSONL transcript file and return list of message dicts.
+
+    Claude Code transcript format nests messages:
+      {type: "user", message: {role: "user", content: "..."}, uuid: "...", ...}
+    Also supports flat format for testing:
+      {role: "user", content: "..."}
+    """
+    if not transcript_path or not os.path.isfile(transcript_path):
+        return []
+
+    messages = []
+    try:
+        with open(transcript_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    # Claude Code nested format: {type: "user", message: {role, content}}
+                    if entry.get("type") in ("user", "assistant") and not entry.get("isSidechain"):
+                        msg = entry.get("message", {})
+                        if isinstance(msg, dict) and msg.get("role"):
+                            messages.append(msg)
+                    # Flat format (testing / future compatibility)
+                    elif "role" in entry and "content" in entry:
+                        messages.append(entry)
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        pass
+    return messages
+
+
+def debug_log(config: dict, *args):
+    """Log to stderr if debug mode is enabled."""
+    if config.get("debug"):
+        print("[Hindsight]", *args, file=sys.stderr)

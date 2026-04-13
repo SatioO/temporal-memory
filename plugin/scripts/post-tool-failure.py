@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 
 def main() -> None:
-    log("[graphmind] PostToolFailure hook triggered ✓")
+    log("PostToolFailure hook triggered ✓")
 
     data = read_json_stdin() or {}
     session_id = data.get("session_id") or "unknown"
@@ -35,7 +35,7 @@ def main() -> None:
         )
 
     except Exception as err:
-        log(f"[graphmind] API call failed: {err}")
+        log(f"API call failed: {err}")
 
 
 if __name__ == "__main__":

@@ -10,9 +10,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 def main() -> None:
     log("[graphmind] PromptSubmit hook triggered ✓")
 
-    data = read_json_stdin() or {}
-    session_id = data.get("session_id") or "unknown"
-    project = data.get("cwd") or os.getcwd()
+    hook_input = read_json_stdin()
+    if hook_input is None:
+        log(f"[graphmind] API call failed hook_input: {hook_input}")
+        return
+
+    project = hook_input.get("cwd", os.getcwd())
+    session_id = hook_input.get("session_id", "unknown")
 
     try:
         fetch(
@@ -25,7 +29,7 @@ def main() -> None:
                 "project": project,
                 "cwd": project,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "data": {"prompt": data.get("prompt")},
+                "data": {"prompt": hook_input.get("prompt")},
             },
             timeout=5,
         )

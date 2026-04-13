@@ -160,7 +160,7 @@ def register_compress_function(sdk: IIIClient, kv: StateKV, provider: MemoryProv
                         "vector indexing failed for obs %s: %s", data.observation_id, e)
 
             await asyncio.gather(
-                kv.set(KV.observations(data.session_id), data.observation_id, compressed),
+                kv.set(KV.observations(data.session_id), data.observation_id, compressed.to_dict()),
                 do_vector_index(),
             )
 

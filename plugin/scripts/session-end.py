@@ -97,7 +97,7 @@ def is_ok(res):
 
 
 def main() -> None:
-    log("[graphmind] SessionEnd hook triggered ✓")
+    log("SessionEnd hook triggered ✓")
 
     data = read_json_stdin() or {}
     session_id = data.get("session_id") or "unknown"
@@ -119,7 +119,7 @@ def main() -> None:
                 "status": res.get("status"),
                 "details": res.get("error"),
             })
-        log("[graphmind] ClaudeBridge Sync hook triggered ✓")
+        log("ClaudeBridge Sync hook triggered ✓")
 
         res = fetch(
             url=f"{REST_URL}/graphmind/claude-bridge/sync",
@@ -136,7 +136,7 @@ def main() -> None:
             })
 
     except Exception as err:
-        log(f"[graphmind] API call failed: {err}")
+        log(f"API call failed: {err}")
 
 
 if __name__ == "__main__":

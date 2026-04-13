@@ -17,7 +17,7 @@ def truncate(value, max_len=MAX_LEN):
 
 
 def main() -> None:
-    log("[graphmind] PostToolUse hook triggered ✓")
+    log("PostToolUse hook triggered ✓")
 
     data = read_json_stdin() or {}
     session_id = data.get("session_id") or "unknown"
@@ -56,7 +56,7 @@ def main() -> None:
         )
 
     except Exception as err:
-        log(f"[graphmind] API call failed: {err}")
+        log(f"API call failed: {err}")
 
 
 if __name__ == "__main__":

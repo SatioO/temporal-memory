@@ -1,9 +1,18 @@
+import logging
+import os
 import re
 from dataclasses import dataclass
 from typing import Callable
 
 from iii import IIIClient
 from schema import Model
+
+# ---------------------------------------------------------------------------
+# Feature flag — snapshot at import time so runtime env mutations cannot
+# disable redaction mid-session (e.g. via LLM-generated shell commands).
+# ---------------------------------------------------------------------------
+
+_REDACT_ENABLED = os.getenv("GRAPHMIND_REDACT", "").lower() not in ("0", "false", "no", "off")
 
 # ---------------------------------------------------------------------------
 # Types
@@ -16,18 +25,26 @@ from schema import Model
 type _Replacer = str | Callable[[re.Match], str]
 
 
-def _full(label: str) -> str:
-    return f"[REDACTED:{label}]"
+def _mask_token(token: str) -> str:
+    """Partially mask a token for debuggability.
+    Short tokens (< 18 chars) are fully masked; longer ones show first 6 + last 4."""
+    if len(token) < 18:
+        return "***"
+    return f"{token[:6]}...{token[-4:]}"
+
+
+def _full(label: str) -> Callable[[re.Match], str]:
+    return lambda m: f"[{label}:{_mask_token(m.group(0))}]"
 
 
 def _value_only(label: str) -> Callable[[re.Match], str]:
     """Preserves the key / prefix (everything before group 1) and redacts only
     the captured value. The pattern must put the secret value in group 1."""
-    replacement = f"[REDACTED:{label}]"
     def replacer(m: re.Match) -> str:
         full = m.group(0)
         val = m.group(1)
-        return full[: m.start(1) - m.start()] + replacement
+        prefix = full[: m.start(1) - m.start()]
+        return f"{prefix}[{label}:{_mask_token(val)}]"
     return replacer
 
 
@@ -56,17 +73,17 @@ _RULES: list[_Rule] = [
         r"[\s\S]*?"
         r"-----END (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----",
         re.MULTILINE,
-    ), _full("private-key")),
+    ), lambda m: "[REDACTED:private-key]"),
 
     _Rule("certificate", re.compile(
         r"-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----",
         re.MULTILINE,
-    ), _full("certificate")),
+    ), lambda m: "[REDACTED:certificate]"),
 
     _Rule("ssh-key", re.compile(
         r"-----BEGIN OPENSSH PRIVATE KEY-----[\s\S]*?-----END OPENSSH PRIVATE KEY-----",
         re.MULTILINE,
-    ), _full("ssh-key")),
+    ), lambda m: "[REDACTED:ssh-key]"),
 
     # --- JWT / bearer tokens (3-part base64url) -------------------------
     _Rule("jwt", re.compile(
@@ -84,7 +101,8 @@ _RULES: list[_Rule] = [
     ), _full("openai-key")),
 
     # --- Google / GCP ----------------------------------------------------
-    _Rule("google-key", re.compile(r"AIza[A-Za-z0-9\-_]{35}"
+    _Rule("google-key", re.compile(
+        r"AIza[A-Za-z0-9\-_]{35}"
     ), _full("google-key")),
 
     _Rule("gcp-service-account", re.compile(
@@ -93,7 +111,8 @@ _RULES: list[_Rule] = [
     ), _value_only("gcp-service-account")),
 
     # --- AWS -------------------------------------------------------------
-    _Rule("aws-access-key", re.compile(r"\bAKIA[0-9A-Z]{16}\b"
+    _Rule("aws-access-key", re.compile(
+        r"\bAKIA[0-9A-Z]{16}\b"
     ), _full("aws-access-key")),
 
     _Rule("aws-secret-key", re.compile(
@@ -107,24 +126,21 @@ _RULES: list[_Rule] = [
     ), _value_only("aws-session-token")),
 
     # --- GitHub ----------------------------------------------------------
-    _Rule("github-pat", re.compile(
-        r"ghp_[A-Za-z0-9]{36,}"
-    ), _full("github-pat")),
-    _Rule("github-pat", re.compile(
-        r"github_pat_[A-Za-z0-9_]{22,}"
-    ), _full("github-pat")),
-    _Rule("github-oauth",  re.compile(r"gho_[A-Za-z0-9]{36}"), _full("github-oauth")),
-    _Rule("github-app",    re.compile(r"ghs_[A-Za-z0-9]{36}"), _full("github-app")),
-    _Rule("github-refresh",re.compile(r"ghr_[A-Za-z0-9]{36}"), _full("github-refresh")),
+    _Rule("github-pat", re.compile(r"ghp_[A-Za-z0-9]{36,}"), _full("github-pat")),
+    _Rule("github-pat", re.compile(r"github_pat_[A-Za-z0-9_]{22,}"), _full("github-pat")),
+    _Rule("github-oauth",   re.compile(r"gho_[A-Za-z0-9]{36}"), _full("github-oauth")),
+    _Rule("github-app",     re.compile(r"ghs_[A-Za-z0-9]{36}"), _full("github-app")),
+    _Rule("github-user",    re.compile(r"ghu_[A-Za-z0-9]{36}"), _full("github-user")),
+    _Rule("github-refresh", re.compile(r"ghr_[A-Za-z0-9]{36}"), _full("github-refresh")),
 
     # --- GitLab ----------------------------------------------------------
     _Rule("gitlab-pat", re.compile(r"glpat-[A-Za-z0-9\-_]{20,}"), _full("gitlab-pat")),
 
     # --- Slack -----------------------------------------------------------
     _Rule("slack-bot",     re.compile(r"xoxb-[0-9]{8,13}-[0-9]{8,13}-[A-Za-z0-9]{24}"), _full("slack-bot")),
-    _Rule("slack-user",    re.compile(r"xoxp-[A-Za-z0-9\-]{72,}"),  _full("slack-user")),
+    _Rule("slack-user",    re.compile(r"xoxp-[A-Za-z0-9\-]{72,}"), _full("slack-user")),
     _Rule("slack-app",     re.compile(r"xoxa-2-[A-Za-z0-9\-]{100,}"), _full("slack-app")),
-    _Rule("slack-refresh", re.compile(r"xoxr-[A-Za-z0-9\-]{72,}"),  _full("slack-refresh")),
+    _Rule("slack-refresh", re.compile(r"xoxr-[A-Za-z0-9\-]{72,}"), _full("slack-refresh")),
 
     # --- Stripe ----------------------------------------------------------
     _Rule("stripe-secret",     re.compile(r"sk_live_[A-Za-z0-9]{24,}"), _full("stripe-secret")),
@@ -148,41 +164,73 @@ _RULES: list[_Rule] = [
     # --- npm / Node ------------------------------------------------------
     _Rule("npm-token", re.compile(r"npm_[A-Za-z0-9]{36,}"), _full("npm-token")),
 
+    # --- PyPI ------------------------------------------------------------
+    _Rule("pypi-token", re.compile(r"pypi-[A-Za-z0-9_\-]{36,}"), _full("pypi-token")),
+
     # --- DigitalOcean ----------------------------------------------------
     _Rule("digitalocean-pat", re.compile(r"dop_v1_[A-Za-z0-9]{64}"), _full("digitalocean-pat")),
+    _Rule("digitalocean-oauth", re.compile(r"doo_v1_[A-Za-z0-9]{64}"), _full("digitalocean-oauth")),
+
+    # --- HuggingFace -----------------------------------------------------
+    _Rule("huggingface-token", re.compile(r"hf_[A-Za-z0-9]{20,}"), _full("huggingface-token")),
+
+    # --- Replicate -------------------------------------------------------
+    _Rule("replicate-token", re.compile(r"r8_[A-Za-z0-9]{20,}"), _full("replicate-token")),
+
+    # --- Groq ------------------------------------------------------------
+    _Rule("groq-key", re.compile(r"gsk_[A-Za-z0-9]{20,}"), _full("groq-key")),
+
+    # --- Perplexity ------------------------------------------------------
+    _Rule("perplexity-key", re.compile(r"pplx-[A-Za-z0-9]{20,}"), _full("perplexity-key")),
+
+    # --- Tavily ----------------------------------------------------------
+    _Rule("tavily-key", re.compile(r"tvly-[A-Za-z0-9]{20,}"), _full("tavily-key")),
+
+    # --- Exa -------------------------------------------------------------
+    _Rule("exa-key", re.compile(r"exa_[A-Za-z0-9]{20,}"), _full("exa-key")),
+
+    # --- Fal.ai ----------------------------------------------------------
+    _Rule("fal-key", re.compile(r"fal_[A-Za-z0-9_\-]{20,}"), _full("fal-key")),
+
+    # --- Firecrawl -------------------------------------------------------
+    _Rule("firecrawl-key", re.compile(r"fc-[A-Za-z0-9]{20,}"), _full("firecrawl-key")),
 
     # --- HashiCorp Vault -------------------------------------------------
     _Rule("vault-token", re.compile(r"\bs\.[A-Za-z0-9]{24}\b"), _full("vault-token")),
 
+    # --- Telegram bot tokens ---------------------------------------------
+    _Rule("telegram-token", re.compile(
+        r"(?:bot)?(\d{8,}):([-A-Za-z0-9_]{30,})"
+    ), lambda m: f"{m.group(1)}:[telegram-token:***]"),
+
     # --- Generic prefixed key patterns -----------------------------------
     _Rule("api-key", re.compile(
-        r"\b(?:sk|pk|ak|rk|ek|fk)-[A-Za-z0-9]{20,}\b"
+        r"\b(?:ak|ek|fk)-[A-Za-z0-9]{20,}\b"
     ), _full("api-key")),
 
     # --- Connection strings with embedded credentials --------------------
     _Rule("connection-string", re.compile(
-        r"(?:postgres(?:ql)?|mysql(?:2)?|mongodb(?:\+srv)?|redis|amqps?|"
+        r"((?:postgres(?:ql)?|mysql(?:2)?|mongodb(?:\+srv)?|redis|amqps?|"
         r"ftp|sftp|ssh|jdbc:[a-z]+|mssql|sqlserver|mariadb)"
-        r"://[^:@\s]+:[^:@\s]+@[^\s\"'`>)\}\]]{5,}",
+        r"://[^:@\s]+:)([^:@\s\"'`>)\}\]]{5,})(@)",
         re.IGNORECASE,
-    ), _full("connection-string")),
+    ), lambda m: f"{m.group(1)}***{m.group(3)}"),
 
     # --- HTTP Authorization headers --------------------------------------
     _Rule("auth-header", re.compile(
-        r"(?:Authorization|X-API-Key|X-Auth-Token|X-Access-Token|X-Secret-Key)"
-        r"\s*:\s*(?:Bearer|Basic|Token|Digest|ApiKey|AWS4-HMAC-SHA256)\s+"
+        r"((?:Authorization|X-API-Key|X-Auth-Token|X-Access-Token|X-Secret-Key)"
+        r"\s*:\s*(?:Bearer|Basic|Token|Digest|ApiKey|AWS4-HMAC-SHA256)\s+)"
         r"([A-Za-z0-9\-._~+/=]{10,})",
         re.IGNORECASE,
-    ), _value_only("auth-header")),
+    ), lambda m: m.group(1) + _mask_token(m.group(2))),
 
     # Bare Authorization header (no scheme keyword)
     _Rule("auth-header", re.compile(
         r"(Authorization\s*:\s*)([A-Za-z0-9\-._~+/=]{20,})",
         re.IGNORECASE,
-    ), lambda m: m.group(1) + "[REDACTED:auth-header]"),
+    ), lambda m: m.group(1) + _mask_token(m.group(2))),
 
     # --- Environment variable / shell assignments ------------------------
-    # export SECRET_KEY=abc123  or  SECRET_KEY=abc123  or  SECRET_KEY: abc123
     _Rule("env-secret", re.compile(
         r"(?:^|(?<=\s)|(?<=[;\"']))(?:export\s+)?"
         r"((?:API[_\-]?KEY|SECRET(?:[_\-]?KEY)?|TOKEN|PASSWORD|PASSWD|PWD|"
@@ -195,40 +243,44 @@ _RULES: list[_Rule] = [
         r"AWS_SECRET_ACCESS_KEY|GCP_(?:SERVICE_ACCOUNT|CREDENTIALS))"
         r"\w*)\s*[=:]\s*[\"']?([^\s\"'#\n\[]{4,})[\"']?",
         re.IGNORECASE | re.MULTILINE,
-    ), lambda m: f"{m.group(1)}=[REDACTED:env-secret]"),
+    ), lambda m: f"{m.group(1)}=[env-secret:{_mask_token(m.group(2))}]"),
 
     # --- JSON / YAML property values for sensitive keys ------------------
-    # "password": "abc123"  →  "password": "[REDACTED:json-secret]"
     _Rule("json-secret", re.compile(
         r'("(?:api[_\-]?key|secret(?:[_\-]?key)?|token|password|passwd|'
         r'credential|auth(?:[_\-]?token)?|private[_\-]?key|access[_\-]?(?:key|token)|'
         r'client[_\-]?secret|client[_\-]?id|refresh[_\-]?token|session[_\-]?(?:token|secret))'
         r'"\s*:\s*)"([^"]{3,})"',
         re.IGNORECASE,
-    ), lambda m: f'{m.group(1)}"[REDACTED:json-secret]"'),
+    ), lambda m: f'{m.group(1)}"[json-secret:{_mask_token(m.group(2))}]"'),
 
-    # YAML / unquoted JSON values
     _Rule("yaml-secret", re.compile(
         r"^(\s*(?:api[_\-]?key|secret(?:[_\-]?key)?|token|password|passwd|"
         r"credential|auth(?:[_\-]?token)?|private[_\-]?key|access[_\-]?(?:key|token)|"
         r"client[_\-]?secret|refresh[_\-]?token)\s*:\s+)([^\s\"'#\n\[]{4,})",
         re.IGNORECASE | re.MULTILINE,
-    ), lambda m: f"{m.group(1)}[REDACTED:yaml-secret]"),
+    ), lambda m: f"{m.group(1)}[yaml-secret:{_mask_token(m.group(2))}]"),
 
     # --- Python / JS / TS code assignments (quoted values) ---------------
-    # password = "abc123"  →  password = "[REDACTED:code-secret]"
     _Rule("code-secret", re.compile(
         r"((?:api[_\-]?key|secret(?:[_\-]?key)?|token|password|passwd|"
         r"private[_\-]?key|access[_\-]?token|client[_\-]?secret|auth[_\-]?token)"
         r"\s*(?:=|:)\s*)[\"']([^\"'\[]{4,})[\"']",
         re.IGNORECASE,
-    ), lambda m: f"{m.group(1)}\"[REDACTED:code-secret]\""),
+    ), lambda m: f'{m.group(1)}"[code-secret:{_mask_token(m.group(2))}]"'),
 
     # --- Bare key=value (no quotes) — last resort, minimum length 8 -----
     _Rule("secret", re.compile(
         r"((?:api[_\-]?key|password|passwd|secret)\s*=\s*)([A-Za-z0-9_\-/.+]{8,})",
         re.IGNORECASE,
-    ), lambda m: f"{m.group(1)}[REDACTED:secret]"),
+    ), lambda m: f"{m.group(1)}[secret:{_mask_token(m.group(2))}]"),
+
+    # --- E.164 phone numbers (Signal, WhatsApp) --------------------------
+    _Rule("phone", re.compile(
+        r"(\+[1-9]\d{6,14})(?![A-Za-z0-9])"
+    ), lambda m: (
+        lambda p: p[:2] + "****" + p[-2:] if len(p) <= 8 else p[:4] + "****" + p[-4:]
+    )(m.group(1))),
 ]
 
 # ---------------------------------------------------------------------------
@@ -236,17 +288,28 @@ _RULES: list[_Rule] = [
 # ---------------------------------------------------------------------------
 
 def strip_private_data(text: str) -> str:
+    if not _REDACT_ENABLED:
+        return text
+
     # 1. Remove explicit <private>...</private> blocks
     result = _PRIVATE_TAG_RE.sub("[REDACTED:private-tag]", text)
 
     # 2. Apply each rule in order
     for rule in _RULES:
-        if callable(rule.replacement):
-            result = rule.pattern.sub(rule.replacement, result)
-        else:
-            result = rule.pattern.sub(rule.replacement, result)
+        result = rule.pattern.sub(rule.replacement, result)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Log formatter — auto-redacts all log output
+# ---------------------------------------------------------------------------
+
+class RedactingFormatter(logging.Formatter):
+    """Log formatter that redacts secrets from every log message."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return strip_private_data(super().format(record))
 
 
 # ---------------------------------------------------------------------------
