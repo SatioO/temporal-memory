@@ -4,6 +4,7 @@ from state.schema import KV
 from state.kv import StateKV
 from schema.base import Model
 from schema import ContextBlock, Session, SessionSummary, CompressedObservation
+from schema.domain import ProceduralMemory
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
@@ -40,6 +41,29 @@ def register_context_function(sdk: IIIClient, kv: StateKV, token_budget: int) ->
 
         budget = data.budget if data.budget is not None else token_budget
         blocks: List[ContextBlock] = []
+
+        # ── Procedural memory ──────────────────────────────────────────────────
+        # Top procedures by strength — always surface first since they encode
+        # durable, high-confidence workflows the agent should follow.
+        all_procedures = await kv.list(KV.procedural, ProceduralMemory)
+        top_procedures = sorted(
+            all_procedures, key=lambda p: p.strength, reverse=True)[:5]
+
+        for proc in top_procedures:
+            steps_text = "\n".join(
+                f"  {i + 1}. {s}" for i, s in enumerate(proc.steps))
+            lines = [
+                f"### {proc.name}", f"Trigger: {proc.trigger_condition}", f"Steps:\n{steps_text}"]
+            if proc.failure_modes:
+                lines.append(
+                    f"Failure modes: {'; '.join(proc.failure_modes[:2])}")
+            content = "\n".join(lines)
+            blocks.append(ContextBlock(
+                type="memory",
+                content=content,
+                tokens=estimate_tokens(content),
+                recency=int(9e12),  # procedures sort before session summaries
+            ))
 
         all_sessions = await kv.list(KV.sessions, Session)
 

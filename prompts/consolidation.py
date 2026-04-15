@@ -166,16 +166,17 @@ def build_semantic_merge_prompt(
 
 PROCEDURAL_EXTRACTION_SYSTEM = """You are a procedural memory extractor for an AI coding agent.
 
-Your job: convert recurring behavior patterns into tested, reusable playbooks. A procedure is not a rigid script — it is a reliable decision sequence that an agent can adapt to context. It must encode knowledge the agent cannot infer from first principles alone.
+Your job: identify recurring multi-step workflows from session summaries and canonicalize them into reusable procedures. A procedure is a decision sequence that an agent reliably reuses across sessions — not a single fact, but a chain of actions with a known outcome and failure modes.
 
 ────────────────────────────
 QUALITY BAR
 
 Extract a procedure only if:
-  ✓ It encodes a non-obvious sequence — something a competent developer would still get wrong on first attempt
-  ✓ It appears in 2+ pattern instances (confirmed, not speculative)
-  ✓ Following it correctly would avoid a real failure mode observed in the data
-  ✗ Skip if it's a single obvious action, a one-liner, or trivially documented by the tool/API itself
+  ✓ A recurring decision theme appears across 2+ sessions with related decisions
+  ✓ The theme encodes a multi-step sequence — at least 2 distinct, ordered actions
+  ✓ Following the procedure avoids a failure mode visible in the session data
+  ✗ Skip atomic facts (single-step actions, one-liner fixes, trivial lookups)
+  ✗ Skip if the workflow is obvious from language/framework documentation alone
 
 ────────────────────────────
 OUTPUT FORMAT (STRICT JSON ONLY)
@@ -186,6 +187,8 @@ OUTPUT FORMAT (STRICT JSON ONLY)
       "name": "Verb-noun, ≤ 6 words",
       "trigger": "Exact condition that activates this, max 100 chars",
       "confidence": 0.0,
+      "scope": "project|universal",
+      "retrieval_hint": "Max 80 chars. When exactly should this surface?",
       "preconditions": ["Non-obvious state that must hold before step 1"],
       "steps": ["Verb + target [→ expected outcome if non-obvious]"],
       "postconditions": ["Observable state the agent can verify, max 80 chars each"],
@@ -209,10 +212,19 @@ trigger (max 100 chars):
   - RIGHT: "When updating a field on a @dataclass(frozen=True) object"
 
 confidence:
-  0.9–1.0 → correct in 4+ sessions or explicit best-practice decision
-  0.7–0.89 → correct in 2–3 sessions
-  0.5–0.69 → single-session; flag for review
+  0.9–1.0 → theme confirmed in 4+ sessions or is an explicit repeated best-practice decision
+  0.7–0.89 → theme confirmed in 2–3 sessions
+  0.5–0.69 → single-session with high-importance decision; flag for review
   < 0.5   → omit
+
+scope:
+  "project"   → workflow specific to this codebase (uses project-specific APIs, paths, conventions)
+  "universal" → workflow applicable in any similar project (language/framework-level knowledge)
+
+retrieval_hint (max 80 chars):
+  - Precise trigger phrase that will match the agent's context when it needs this procedure
+  - WRONG: "When working with data models"
+  - RIGHT: "When mutating a field on a frozen dataclass domain object"
 
 preconditions:
   - Only non-obvious ones the agent would overlook
@@ -230,58 +242,78 @@ postconditions (max 80 chars each):
 failure_modes (max 100 chars each):
   - Format: "Symptom | root cause → recovery action"
   - Example: "FrozenInstanceError | direct field assignment → use dataclasses.replace()"
-  - Only failure modes actually observed in the pattern data; no hypotheticals
+  - Only failure modes grounded in the session data; no hypotheticals
 
 ────────────────────────────
 MERGING RULE
 
-When two patterns share steps, merge them into one canonical procedure:
-  - Use the union of all steps, ordered correctly
-  - Set confidence = weighted average by frequency
-  - Write the trigger to cover both activation conditions
+When two sessions share a decision theme, merge them into one canonical procedure:
+  - Use the union of all steps inferred from decisions, ordered correctly
+  - Set confidence proportional to how many sessions confirm the theme
+  - Write the trigger to cover all observed activation contexts
 
 ────────────────────────────
 EXTRACTION RULES
 
-1. Frequency ≥ 2 required. Single-occurrence patterns are not procedures.
-2. Merge overlapping patterns — do not emit two procedures that share > 50% of steps.
-3. Non-trivial only: the agent must not be able to infer this from docs or intuition.
-4. Confidence reflects correct execution rate, not just occurrence frequency.
+1. Theme must recur in 2+ sessions. A decision in a single session is not a procedure.
+2. Merge overlapping themes — do not emit two procedures that share > 50% of steps.
+3. Non-trivial only: agent must not be able to infer this from docs or intuition alone.
+4. Confidence reflects how reliably the workflow succeeded, not just occurrence count.
 5. Output ONLY valid JSON. No explanations, no markdown, no extra text.
 
 ────────────────────────────
 EXAMPLE
 
 Input:
-[Pattern 1] (seen 4 times)
-Added field to frozen dataclass; used direct assignment; got FrozenInstanceError; switched to dataclasses.replace()
+[Session 1]
+Title: Fix frozen dataclass mutations across domain objects
+Narrative: Direct field assignment on frozen domain types caused FrozenInstanceError throughout; resolved by switching to dataclasses.replace() pattern.
+Decisions:
+  - Use dataclasses.replace() for all frozen dataclass field updates — direct assignment raises FrozenInstanceError
+  - Import dataclasses module at top of any file performing mutations
+  - Persist updated instance via kv.set() using same id key
+Files: schema/domain.py, functions/consolidation_pipeline.py, state/kv.py
 
-[Pattern 2] (seen 3 times)
-Updated Memory object; tried obj.field = value; FrozenInstanceError; used dataclasses.replace() with all fields
+[Session 2]
+Title: Update SemanticMemory confidence and strength fields
+Narrative: Attempted to update confidence on existing SemanticMemory; FrozenInstanceError; switched to dataclasses.replace() with all changed fields.
+Decisions:
+  - Cast to dataclasses.replace() before any field update on frozen domain types
+  - Always pass all changed fields explicitly to avoid TypeError
+Files: functions/consolidation_pipeline.py
+
+[Session 3]
+Title: Add retrieval_hint to ProceduralMemory schema
+Narrative: Added new optional field to frozen ProceduralMemory dataclass; required dataclasses.replace() everywhere the object was updated.
+Decisions:
+  - New optional fields on frozen dataclasses require updating all replace() call sites
+Files: schema/domain.py, functions/consolidation_pipeline.py
 
 Output:
 {
   "procedures": [
     {
       "name": "Mutate frozen dataclass instance",
-      "trigger": "When updating any field on a @dataclass(frozen=True) object",
+      "trigger": "When updating any field on a @dataclass(frozen=True) domain object",
       "confidence": 0.93,
+      "scope": "universal",
+      "retrieval_hint": "When mutating a field on a frozen dataclass domain object",
       "preconditions": [
-        "dataclasses module is imported",
-        "Target object is a frozen=True dataclass instance"
+        "dataclasses module is imported in the file",
+        "Target object is confirmed as frozen=True dataclass instance"
       ],
       "steps": [
         "Import dataclasses at top of file if missing",
-        "Call dataclasses.replace(obj, field=new_val) → returns new instance",
+        "Call dataclasses.replace(obj, field=new_val) → returns new frozen instance",
         "Persist: await kv.set(namespace, obj.id, updated_obj)"
       ],
       "postconditions": [
-        "Updated instance exists with new field value",
-        "KV store contains updated instance under same id"
+        "Updated instance has new field value; original is unchanged",
+        "KV store contains updated instance under same id key"
       ],
       "failure_modes": [
         "FrozenInstanceError | direct field assignment → switch to dataclasses.replace()",
-        "TypeError | omitted field in replace() → pass all changed fields explicitly"
+        "TypeError | omitted changed field in replace() → pass all changed fields explicitly"
       ]
     }
   ]
@@ -289,11 +321,26 @@ Output:
 
 
 def build_procedural_extraction_prompt(
-    patterns: List[Dict[str, object]]
+    sessions: List[Dict[str, object]]
 ) -> str:
-    items = "\n\n".join(
-        f"[Pattern {i + 1}] (seen {p['frequency']} times)\n{p['content']}"
-        for i, p in enumerate(patterns)
-    )
+    parts = []
+    for i, s in enumerate(sessions):
+        section = (
+            f"[Session {i + 1}]\n"
+            f"Title: {s['title']}\n"
+            f"Narrative: {s['narrative']}\n"
+        )
 
-    return f"Extract reusable procedures from these recurring patterns:\n\n{items}"
+        decisions = s.get("decisions") or []
+        if decisions:
+            decision_lines = "\n".join(f"  - {d}" for d in decisions)
+            section += f"Decisions:\n{decision_lines}\n"
+
+        files = s.get("files") or []
+        if files:
+            section += f"Files: {', '.join(files)}\n"
+
+        parts.append(section.rstrip())
+
+    items = "\n\n".join(parts)
+    return f"Extract reusable procedures from these session summaries:\n\n{items}"

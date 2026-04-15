@@ -16,7 +16,7 @@ Output EXACTLY this JSON (no extra text, no markdown, no trailing commas):
     "path/to/file"
   ],
   "concepts": [
-    "search term, max 40 chars"
+    "search term, max 40 chars max 3 concepts"
   ]
 }
 
@@ -58,7 +58,7 @@ Output:
     "Use .lower()==’true’ for bool env vars — os.getenv always returns str"
   ],
   "files": ["sync.py", "models.py", "config.py"],
-  "concepts": ["pydantic v2", "strict mode", "type normalization", "env parsing", "boolean coercion"]
+  "concepts": ["pydantic v2", "strict mode"]
 }
 
 ---
@@ -88,7 +88,7 @@ Output:
     "JSON over binary — debuggable; perf not a bottleneck at current size"
   ],
   "files": ["index.ts", "storage.ts"],
-  "concepts": ["inverted index", "set lookup", "term frequency", "JSON persistence"]
+  "concepts": ["inverted index", "term frequency", "JSON persistence"]
 }
 
 ---

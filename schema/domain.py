@@ -225,6 +225,8 @@ class ProceduralMemory(Model):
     preconditions: Optional[List[str]] = None   # what must be true before step 1
     postconditions: Optional[List[str]] = None  # observable state after completion
     failure_modes: Optional[List[str]] = None   # "failure → recovery" pairs
+    scope: str = "project"                  # "project" | "universal"
+    retrieval_hint: Optional[str] = None    # when to surface this procedure
 
 
 @dataclass(frozen=True)

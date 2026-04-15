@@ -1,6 +1,6 @@
 from state.schema import KV, generate_id
 from state.kv import StateKV
-from schema.domain import Memory, MemoryType, ProceduralMemory, SemanticMemory
+from schema.domain import ProceduralMemory, SemanticMemory
 from schema.config import ConsolidatePipelineConfig
 from schema.base import Model
 from schema import MemoryProvider, SessionSummary
@@ -88,22 +88,22 @@ def register_consolidation_pipeline_function(
         tier = "all" if data.tier is None else data.tier
         results: Dict[str, Any] = {}
 
+        # Load summaries once — both semantic and procedural tiers share this corpus
+        all_summaries = await kv.list(KV.summaries, SessionSummary)
+        recent_summaries = sorted(
+            all_summaries, key=lambda s: s.created_at, reverse=True
+        )[:20]
+
         # ── Semantic tier ──────────────────────────────────────────────────────
         if tier in ("all", "semantic"):
-            summaries = await kv.list(KV.summaries, SessionSummary)
-
             existing_semantic = await kv.list(KV.semantic, SemanticMemory)
 
-            if len(summaries) < 1:
+            if len(all_summaries) < 1:
                 results["semantic"] = {
                     "skipped": True,
                     "reason": "fewer than 5 summaries",
                 }
             else:
-                recent_summaries = sorted(
-                    summaries, key=lambda s: s.created_at, reverse=True
-                )[:20]
-
                 prompt = build_semantic_merge_prompt([
                     {
                         "title": s.title,
@@ -193,7 +193,7 @@ def register_consolidation_pipeline_function(
 
                     results["semantic"] = {
                         "new_facts": new_facts,
-                        "total_summaries": len(summaries),
+                        "total_summaries": len(all_summaries),
                     }
 
                 except json.JSONDecodeError as err:
@@ -221,33 +221,32 @@ def register_consolidation_pipeline_function(
 
         # ── Procedural tier ────────────────────────────────────────────────────
         if tier in ("all", "procedural"):
-            memories = await kv.list(KV.memories, Memory)
-            patterns: List[Dict[str, Any]] = [
+            # Use decision-rich session summaries as input (same corpus as semantic
+            # tier). Sessions with explicit decisions are the ground truth for what
+            # workflows the agent actually executed and why.
+            proc_sessions: List[Dict[str, Any]] = [
                 {
-                    "content": m.content,
-                    "frequency": len(m.session_ids) or 1,
+                    "title": s.title,
+                    "narrative": s.narrative,
+                    "decisions": s.key_decisions,
+                    "files": s.files_modified,
                 }
-                for m in memories
-                if m.is_latest and m.type == MemoryType.PATTERN
-                and (len(m.session_ids) or 1) >= 2
+                for s in recent_summaries
+                if s.key_decisions  # only sessions with recorded decisions
             ]
 
-            # Collect session ids from the contributing pattern memories
-            pattern_session_ids: List[str] = list({
-                sid
-                for m in memories
-                if m.is_latest and m.type == MemoryType.PATTERN
-                and (len(m.session_ids) or 1) >= 2
-                for sid in m.session_ids
-            })
+            # Collect session ids from contributing summaries
+            pattern_session_ids: List[str] = [
+                s.session_id for s in recent_summaries if s.key_decisions
+            ]
 
-            if len(patterns) < 2:
+            if len(proc_sessions) < 5:
                 results["procedural"] = {
                     "skipped": True,
-                    "reason": "fewer than 2 recurring patterns",
+                    "reason": "fewer than 5 sessions with recorded decisions",
                 }
             else:
-                prompt = build_procedural_extraction_prompt(patterns)
+                prompt = build_procedural_extraction_prompt(proc_sessions)
 
                 try:
                     response = await provider.summarize(
@@ -280,6 +279,11 @@ def register_consolidation_pipeline_function(
                         postconditions = [str(s).strip() for s in item.get("postconditions", []) if str(s).strip()] or None
                         failure_modes = [str(s).strip() for s in item.get("failure_modes", []) if str(s).strip()] or None
 
+                        scope = str(item.get("scope", "project")).strip()
+                        if scope not in ("project", "universal"):
+                            scope = "project"
+                        retrieval_hint = str(item.get("retrieval_hint", "")).strip() or None
+
                         existing = next(
                             (p for p in existing_procs
                              if p.name.lower() == name.lower()),
@@ -300,6 +304,8 @@ def register_consolidation_pipeline_function(
                                 preconditions=preconditions or existing.preconditions,
                                 postconditions=postconditions or existing.postconditions,
                                 failure_modes=failure_modes or existing.failure_modes,
+                                scope=scope if scope != "project" else existing.scope,
+                                retrieval_hint=retrieval_hint or existing.retrieval_hint,
                             )
                             await kv.set(KV.procedural, updated.id, updated)
                         else:
@@ -317,13 +323,15 @@ def register_consolidation_pipeline_function(
                                 preconditions=preconditions,
                                 postconditions=postconditions,
                                 failure_modes=failure_modes,
+                                scope=scope,
+                                retrieval_hint=retrieval_hint,
                             )
                             await kv.set(KV.procedural, proc.id, proc)
                             new_procs += 1
 
                     results["procedural"] = {
                         "new_procedures": new_procs,
-                        "patterns_analyzed": len(patterns),
+                        "sessions_analyzed": len(proc_sessions),
                     }
 
                 except json.JSONDecodeError as err:
