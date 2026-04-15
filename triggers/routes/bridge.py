@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Dict
 
 from iii import TriggerRequest
 from functions.auto_forget import AutoForgetPayload
@@ -7,6 +7,7 @@ from functions.consolidate import ConsolidatePayload
 from functions.context import ContextPayload
 from functions.enrich import EnrichPayload
 from functions.file_context import FileContextPayload
+from functions.graph import GraphExtractPayload
 from functions.remember import ForgetPayload, RememberPayload
 from functions.search import SearchPayload
 from functions.smart_search import SmartSearchPayload
@@ -151,6 +152,22 @@ def bridge_router(sdk: Any, kv: StateKV, middleware: list[Middleware] = None) ->
         result = await sdk.trigger_async(TriggerRequest(
             function_id="mem::auto_forget",
             payload=req.body.to_dict(),
+        ))
+        return Response(status_code=200, body=result)
+
+    @router.post("graph_extract", "api::graph_extract", GraphExtractPayload)
+    async def handle_graph_extract(req: Request[GraphExtractPayload]) -> Response:
+        result = await sdk.trigger_async(TriggerRequest(
+            function_id="mem::graph_extract",
+            payload=req.body.to_dict(),
+        ))
+        return Response(status_code=200, body=result)
+
+    @router.get("graph_stats", "api::graph_stats")
+    async def handle_graph_stats(_) -> Response:
+        result = await sdk.trigger_async(TriggerRequest(
+            function_id="mem::graph_stats",
+            payload={}
         ))
         return Response(status_code=200, body=result)
 

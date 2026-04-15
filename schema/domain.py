@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from schema.base import Model
 
@@ -41,6 +41,44 @@ class CircuitBreakerState(str, Enum):
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half-open"
+
+
+class GraphNodeType(str, Enum):
+    FILE = "file"
+    FUNCTION = "function"
+    CONCEPT = "concept"
+    ERROR = "error"
+    DECISION = "decision"
+    PATTERN = "pattern"
+    LIBRARY = "library"
+    PERSON = "person"
+    ROLE = "role"
+    PROJECT = "project"
+    PREFERENCE = "preference"
+    LOCATION = "location"
+    ORGANIZATION = "organization"
+    EVENT = "event"
+
+
+class GraphEdgeType(str, Enum):
+    USES = "uses"
+    IMPORTS = "imports"
+    MODIFIES = "modifies"
+    CAUSES = "causes"
+    FIXES = "fixes"
+    DEPENDS_ON = "depends_on"
+    RELATED_TO = "related_to"
+    WORKS_AT = "works_at"
+    PREFERS = "prefers"
+    BLOCKED_BY = "blocked_by"
+    CAUSED_BY = "caused_by"
+    OPTIMIZES_FOR = "optimizes_for"
+    REJECTED = "rejected"
+    AVOIDS = "avoids"
+    LOCATED_IN = "located_in"
+    SUCCEEDED_BY = "succeeded_by"
+    SUPERSEDES = "supersedes"
+    HAS_ROLE = "has_role"
 
 
 class HookType(str, Enum):
@@ -156,14 +194,19 @@ class Memory(Model):
 class SemanticMemory(Model):
     id: str
     fact: str
-    confidence: int
+    confidence: float
     source_session_ids: List[str]
     source_memory_ids: List[str]
     access_count: int
     last_accessed_at: str
-    strength: int
+    strength: float
     created_at: str
     updated_at: str
+    # Extraction metadata — populated during consolidation
+    category: Optional[str] = None          # architecture, code_pattern, error_fix, …
+    scope: str = "project"                  # "project" | "universal"
+    retrieval_hint: Optional[str] = None    # when to surface this fact
+    superseded_by: Optional[str] = None     # id of the replacing SemanticMemory
 
 
 @dataclass(frozen=True)
@@ -177,6 +220,11 @@ class ProceduralMemory(Model):
     strength: float
     created_at: str
     updated_at: str
+    # Rich procedure structure — populated during consolidation
+    confidence: float = 0.5                 # reliability score across observed executions
+    preconditions: Optional[List[str]] = None   # what must be true before step 1
+    postconditions: Optional[List[str]] = None  # observable state after completion
+    failure_modes: Optional[List[str]] = None   # "failure → recovery" pairs
 
 
 @dataclass(frozen=True)
@@ -235,6 +283,48 @@ class HybridSearchResult(Model):
     vector_score: float
     combined_score: float
     session_id: str
+
+
+@dataclass(frozen=True)
+class GraphNode(Model):
+    id: str
+    type: GraphNodeType
+    name: str
+    properties: Dict[str, Any]
+    source_obs_ids: List[str]
+    created_at: str
+    updated_at: Optional[str] = None
+    aliases: Optional[List[str]] = None
+    stale: Optional[bool] = None
+
+
+@dataclass(frozen=True)
+class EdgeContext(Model):
+    reasoning: Optional[str] = None
+    sentiment: Optional[str] = None
+    alternatives: Optional[List[str]] = None
+    situational_factors: Optional[List[str]] = None
+    confidence: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class GraphEdge(Model):
+    id: str
+    type: "GraphEdgeType"
+    source_node_id: str
+    target_node_id: str
+    weight: float
+    source_obs_ids: List[str]
+    created_at: str
+
+    tcommit: Optional[str] = None
+    tvalid: Optional[str] = None
+    tvalid_end: Optional[str] = None
+    context: Optional[EdgeContext] = None
+    version: Optional[int] = None
+    superseded_by: Optional[str] = None
+    is_latest: Optional[bool] = None
+    stale: Optional[bool] = None
 
 
 @dataclass

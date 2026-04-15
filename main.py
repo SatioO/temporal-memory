@@ -88,7 +88,7 @@ def main():
     register_timeline_function(sdk, kv)
     register_auto_forget_function(sdk, kv)
     register_enrich_function(sdk, kv)
-    register_graph_function(sdk, kv)
+    register_graph_function(sdk, kv, provider)
 
     # Search functionality
     bm25_index = get_bm25_index()
@@ -111,17 +111,20 @@ def main():
     ).result(timeout=30)
     if bm25_loaded and bm25_loaded.size > 0:
         bm25_index.restore_from(bm25_loaded)
-        logger.info("[graphmind] loaded persisted BM25 index (%d docs)", bm25_index.size)
+        logger.info(
+            "[graphmind] loaded persisted BM25 index (%d docs)", bm25_index.size)
     if vector_loaded and vector_index and vector_loaded.size > 0:
         vector_index.restore_from(vector_loaded)
-        logger.info("[graphmind] loaded persisted vector index (%d vectors)", vector_index.size)
+        logger.info(
+            "[graphmind] loaded persisted vector index (%d vectors)", vector_index.size)
     if bm25_index.size == 0:
         try:
             count = asyncio.run_coroutine_threadsafe(
                 rebuild_index(kv, bm25_index), sdk._loop
             ).result(timeout=30)
             if count > 0:
-                logger.info("[graphmind] search index rebuilt (%d observations)", count)
+                logger.info(
+                    "[graphmind] search index rebuilt (%d observations)", count)
                 asyncio.run_coroutine_threadsafe(
                     index_persistence.save(), sdk._loop
                 ).result(timeout=10)
@@ -184,7 +187,8 @@ def main():
             index_persistence.save(), sdk._loop
         ).result(timeout=30)
     except TimeoutError:
-        logger.warning("index save timed out on shutdown; in-flight data may not be persisted")
+        logger.warning(
+            "index save timed out on shutdown; in-flight data may not be persisted")
     sdk.shutdown()
 
 

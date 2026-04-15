@@ -20,8 +20,19 @@ from typing import Any, Dict, List, Optional, TypeVar
 
 T = TypeVar("T")
 
-
 logger = get_logger("consolidation_pipeline")
+
+
+def _fact_similarity(a: str, b: str) -> float:
+    """Jaccard token-overlap similarity between two fact strings (0–1)."""
+    toks_a = set(a.lower().split())
+    toks_b = set(b.lower().split())
+    if not toks_a or not toks_b:
+        return 0.0
+    return len(toks_a & toks_b) / len(toks_a | toks_b)
+
+
+_FUZZY_MATCH_THRESHOLD = 0.65  # facts with overlap ≥ this are treated as duplicates
 
 
 def apply_decay(items: List[T], decay_days: float) -> List[T]:
@@ -97,6 +108,8 @@ def register_consolidation_pipeline_function(
                     {
                         "title": s.title,
                         "narrative": s.narrative,
+                        "decisions": s.key_decisions,
+                        "files": s.files_modified,
                         "concepts": s.concepts,
                     }
                     for s in recent_summaries
@@ -124,11 +137,24 @@ def register_consolidation_pipeline_function(
                         if not (0.0 <= confidence <= 1.0):
                             confidence = 0.5
 
+                        category = str(item.get("category", "")).strip() or None
+                        scope = str(item.get("scope", "project")).strip()
+                        if scope not in ("project", "universal"):
+                            scope = "project"
+                        retrieval_hint = str(item.get("retrieval_hint", "")).strip() or None
+
+                        # Fuzzy dedup: exact match first, then token-overlap fallback
                         existing = next(
                             (s for s in existing_semantic
                              if s.fact.lower() == fact.lower()),
                             None,
                         )
+                        if existing is None:
+                            existing = next(
+                                (s for s in existing_semantic
+                                 if _fact_similarity(s.fact, fact) >= _FUZZY_MATCH_THRESHOLD),
+                                None,
+                            )
 
                         if existing:
                             updated = dataclasses.replace(
@@ -136,8 +162,12 @@ def register_consolidation_pipeline_function(
                                 access_count=existing.access_count + 1,
                                 last_accessed_at=now,
                                 updated_at=now,
-                                confidence=max(
-                                    existing.confidence, confidence),
+                                confidence=max(existing.confidence, confidence),
+                                strength=min(1.0, existing.strength + 0.05),
+                                # Prefer more specific metadata when reinforcing
+                                category=category or existing.category,
+                                scope=scope if scope != "project" else existing.scope,
+                                retrieval_hint=retrieval_hint or existing.retrieval_hint,
                             )
                             await kv.set(KV.semantic, updated.id, updated)
                         else:
@@ -154,6 +184,9 @@ def register_consolidation_pipeline_function(
                                 strength=confidence,
                                 created_at=now,
                                 updated_at=now,
+                                category=category,
+                                scope=scope,
+                                retrieval_hint=retrieval_hint,
                             )
                             await kv.set(KV.semantic, sem.id, sem)
                             new_facts += 1
@@ -199,6 +232,15 @@ def register_consolidation_pipeline_function(
                 and (len(m.session_ids) or 1) >= 2
             ]
 
+            # Collect session ids from the contributing pattern memories
+            pattern_session_ids: List[str] = list({
+                sid
+                for m in memories
+                if m.is_latest and m.type == MemoryType.PATTERN
+                and (len(m.session_ids) or 1) >= 2
+                for sid in m.session_ids
+            })
+
             if len(patterns) < 2:
                 results["procedural"] = {
                     "skipped": True,
@@ -212,7 +254,6 @@ def register_consolidation_pipeline_function(
                         PROCEDURAL_EXTRACTION_SYSTEM, prompt
                     )
 
-                    # prompt guarantees strict JSON: {"procedures": [{"name": "...", "trigger": "...", "steps": [...]}]}
                     parsed = json.loads(response)
                     procedures = parsed.get("procedures", [])
 
@@ -223,11 +264,21 @@ def register_consolidation_pipeline_function(
                     for item in procedures:
                         name = str(item.get("name", "")).strip()
                         trigger = str(item.get("trigger", "")).strip()
-                        steps = [str(s).strip() for s in item.get(
-                            "steps", []) if str(s).strip()]
+                        steps = [str(s).strip() for s in item.get("steps", []) if str(s).strip()]
 
                         if not name or not trigger or not steps:
                             continue
+
+                        try:
+                            proc_confidence = float(item.get("confidence", 0.5))
+                        except (ValueError, TypeError):
+                            proc_confidence = 0.5
+                        if not (0.0 <= proc_confidence <= 1.0):
+                            proc_confidence = 0.5
+
+                        preconditions = [str(s).strip() for s in item.get("preconditions", []) if str(s).strip()] or None
+                        postconditions = [str(s).strip() for s in item.get("postconditions", []) if str(s).strip()] or None
+                        failure_modes = [str(s).strip() for s in item.get("failure_modes", []) if str(s).strip()] or None
 
                         existing = next(
                             (p for p in existing_procs
@@ -236,11 +287,19 @@ def register_consolidation_pipeline_function(
                         )
 
                         if existing:
+                            # Merge session sources and reinforce strength
+                            merged_sids = list(set(existing.source_session_ids) | set(pattern_session_ids))
                             updated = dataclasses.replace(
                                 existing,
                                 frequency=existing.frequency + 1,
                                 updated_at=now,
                                 strength=min(1.0, existing.strength + 0.1),
+                                confidence=max(existing.confidence, proc_confidence),
+                                source_session_ids=merged_sids,
+                                # Prefer richer metadata from later extractions
+                                preconditions=preconditions or existing.preconditions,
+                                postconditions=postconditions or existing.postconditions,
+                                failure_modes=failure_modes or existing.failure_modes,
                             )
                             await kv.set(KV.procedural, updated.id, updated)
                         else:
@@ -250,10 +309,14 @@ def register_consolidation_pipeline_function(
                                 steps=steps,
                                 trigger_condition=trigger,
                                 frequency=1,
-                                source_session_ids=[],
-                                strength=0.5,
+                                source_session_ids=pattern_session_ids,
+                                strength=proc_confidence,
                                 created_at=now,
                                 updated_at=now,
+                                confidence=proc_confidence,
+                                preconditions=preconditions,
+                                postconditions=postconditions,
+                                failure_modes=failure_modes,
                             )
                             await kv.set(KV.procedural, proc.id, proc)
                             new_procs += 1

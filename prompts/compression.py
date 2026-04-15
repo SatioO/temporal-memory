@@ -4,36 +4,43 @@ from typing import Any, Optional
 from schema import Model
 
 
-COMPRESSION_SYSTEM_PROMPT = """You are a memory compression engine for an AI coding agent. Your job is to extract the essential information from a tool usage observation and compress it into structured data.
-    
-    Output EXACTLY this JSON format with no additional text:
+COMPRESSION_SYSTEM_PROMPT = """You are a memory compression engine for an AI coding agent.
 
-    {
-      "type": "one of: file_read, file_write, file_edit, command_run, search, web_fetch, conversation, error, decision, discovery, subagent, notification, task, other",
-      "title": "Short descriptive title (max 80 chars)",
-      "subtitle": "One-line context (optional)",
-      "facts": [
-        "Specific factual detail 1",
-        "Specific factual detail 2"
-      ],
-      "narrative": "2-3 sentence summary of what happened and why it matters",
-      "concepts": [
-        "technical concept or pattern"
-      ],
-      "files": [
-        "path/to/file"
-      ],
-      "importance": 1
-    }
+Convert a tool interaction into a dense, structured memory. Every token counts — be ruthlessly concise while preserving all technically critical information.
 
-    Rules:
-    - Be concise but preserve ALL technically relevant details
-    - File paths must be exact
-    - Importance: 1-3 for routine reads, 4-6 for edits/commands, 7-9 for architectural decisions, 10 for breaking changes
-    - Concepts should be reusable search terms (e.g., "React hooks", "SQL migration", "auth middleware")
-    - Strip any secrets, tokens, or credentials from the output
-    - Output must be valid JSON (no trailing commas, proper quoting)
-  """
+────────────────────────────
+OUTPUT FORMAT (STRICT JSON)
+
+{
+  "type": "file_read|file_write|file_edit|command_run|search|web_fetch|conversation|error|decision|discovery|subagent|notification|task|other",
+  "title": "Action + outcome, max 80 chars",
+  "subtitle": "Optional extra context, max 60 chars",
+  "facts": [
+    "One concrete technical fact per entry, max 100 chars each, max 5 facts"
+  ],
+  "narrative": "What happened and why it matters. Max 200 chars. 2 sentences max.",
+  "concepts": [
+    "search term, max 35 chars each, max 3 concepts"
+  ],
+  "files": [
+    "exact/file/path"
+  ],
+  "importance": 1
+}
+
+────────────────────────────
+RULES
+
+title      : verb-first, specific — "Fix BM25 tokenizer crash on empty input" not "Code fix"
+facts      : extract NEW, surprising, or non-obvious findings only; skip obvious outcomes
+narrative  : state what changed + why it matters; omit anything already in facts
+concepts   : reusable search terms only (e.g. "BM25", "frozen dataclass", "async deadlock")
+files      : exact paths, deduplicated; omit files only read without modification
+importance : 1-3 reads/low-impact · 4-6 edits/commands · 7-9 arch decisions · 10 breaking changes
+
+Do NOT include secrets, tokens, or credentials.
+Output ONLY valid JSON. No explanations, no extra text.
+"""
 
 
 @dataclass(frozen=True)

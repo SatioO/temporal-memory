@@ -1,128 +1,272 @@
 from dataclasses import dataclass
-from typing import List, Optional
-from logger import get_logger
 from datetime import datetime, timezone
+import json
+from typing import Dict, List
+from logger import get_logger
 from iii import IIIClient
+from prompts.graph_extraction import GRAPH_EXTRACTION_SYSTEM, build_graph_extraction_prompt
+from schema import CompressedObservation, MemoryProvider
+from schema.domain import EdgeContext, GraphEdge, GraphNode
 from state.kv import StateKV
-from state.schema import KV, generate_id
 from schema.base import Model
+from state.schema import KV, generate_id
 
 logger = get_logger("graph")
 
 
 @dataclass(frozen=True)
-class GraphNode(Model):
-    id: str
-    label: str
-    type: str
-    properties: dict
-    created_at: str
-    updated_at: str
+class GraphExtractPayload(Model):
+    observations: List[CompressedObservation]
 
 
 @dataclass(frozen=True)
-class GraphEdge(Model):
-    id: str
-    source_id: str
-    target_id: str
-    relation: str
-    weight: float
-    created_at: str
+class ParsedGraph(Model):
+    nodes: List[GraphNode]
+    edges: List[GraphEdge]
 
 
-@dataclass(frozen=True)
-class AddNodePayload(Model):
-    label: str
-    type: str
-    properties: Optional[dict] = None
+def parse_graph_json(
+    json_str: str,
+    observation_ids: List[str],
+) -> ParsedGraph:
 
+    nodes: List[GraphNode] = []
+    edges: List[GraphEdge] = []
+    now = datetime.now(timezone.utc).isoformat()
 
-@dataclass(frozen=True)
-class AddEdgePayload(Model):
-    source_id: str
-    target_id: str
-    relation: str
-    weight: Optional[float] = None
+    try:
+        data = json.loads(json_str)
+    except Exception as e:
+        logger.warning("Failed to parse graph JSON: %s", e)
+        return ParsedGraph(nodes=[], edges=[])
 
+    entity_name_to_node: Dict[str, GraphNode] = {}
 
-@dataclass(frozen=True)
-class QueryGraphPayload(Model):
-    node_id: Optional[str] = None
-    type: Optional[str] = None
-    relation: Optional[str] = None
+    # -----------------------------
+    # Parse Entities → Nodes
+    # -----------------------------
+    for e in data.get("entities", []):
+        name = e.get("name")
+        node_type = e.get("type")
 
+        if not name or not node_type:
+            continue
 
-def register_graph_function(sdk: IIIClient, kv: StateKV):
-    async def handle_add_node(raw_data: dict):
-        data = AddNodePayload.from_dict(raw_data)
-
-        if not data.label or not data.label.strip():
-            return {"success": False, "error": "label is required"}
-
-        if not data.type or not data.type.strip():
-            return {"success": False, "error": "type is required"}
-
-        now = datetime.now(timezone.utc).isoformat()
+        raw_aliases = e.get("aliases") or []
+        aliases = [a for a in raw_aliases if isinstance(a, str) and a] or None
 
         node = GraphNode(
-            id=generate_id("node"),
-            label=data.label,
-            type=data.type,
-            properties=data.properties or {},
+            id=generate_id("gn"),
+            type=node_type,
+            name=name,
+            properties=e.get("properties", {}) or {},
+            source_obs_ids=observation_ids,
             created_at=now,
-            updated_at=now,
+            aliases=aliases,
         )
 
-        await kv.set(KV.graph_nodes, node.id, node)
-        logger.info("Graph node added (id: %s, type: %s)", node.id, node.type)
-        return {"success": True, "node": node}
+        nodes.append(node)
+        entity_name_to_node[name] = node
 
-    async def handle_add_edge(raw_data: dict):
-        data = AddEdgePayload.from_dict(raw_data)
+    # -----------------------------
+    # Parse Relationships → Edges
+    # -----------------------------
+    for r in data.get("relationships", []):
+        rel_type = r.get("type")
+        source_name = r.get("source")
+        target_name = r.get("target")
 
-        if not data.source_id or not data.target_id:
-            return {"success": False, "error": "source_id and target_id are required"}
+        if not rel_type or not source_name or not target_name:
+            continue
 
-        if not data.relation or not data.relation.strip():
-            return {"success": False, "error": "relation is required"}
+        source_node = entity_name_to_node.get(source_name)
+        target_node = entity_name_to_node.get(target_name)
 
-        now = datetime.now(timezone.utc).isoformat()
+        if not source_node or not target_node:
+            continue
+
+        try:
+            weight = float(r.get("weight", 0.5))
+        except (TypeError, ValueError):
+            weight = 0.5
+
+        weight = max(0.0, min(1.0, weight))
+
+        raw_ctx = r.get("context")
+        edge_context: EdgeContext | None = None
+        if isinstance(raw_ctx, dict):
+            ctx_confidence = raw_ctx.get("confidence")
+            if ctx_confidence is not None:
+                try:
+                    ctx_confidence = float(ctx_confidence)
+                    ctx_confidence = max(0.0, min(1.0, ctx_confidence))
+                except (TypeError, ValueError):
+                    ctx_confidence = None
+            edge_context = EdgeContext(
+                reasoning=raw_ctx.get("reasoning") or None,
+                sentiment=raw_ctx.get("sentiment") or None,
+                alternatives=raw_ctx.get("alternatives") or None,
+                confidence=ctx_confidence,
+            )
 
         edge = GraphEdge(
-            id=generate_id("edge"),
-            source_id=data.source_id,
-            target_id=data.target_id,
-            relation=data.relation,
-            weight=data.weight if data.weight is not None else 1.0,
+            id=generate_id("ge"),
+            type=rel_type,
+            source_node_id=source_node.id,
+            target_node_id=target_node.id,
+            weight=weight,
+            source_obs_ids=observation_ids,
             created_at=now,
+            context=edge_context,
         )
 
-        await kv.set(KV.graph_edges, edge.id, edge)
-        logger.info("Graph edge added (id: %s, relation: %s)", edge.id, edge.relation)
-        return {"success": True, "edge": edge}
+        edges.append(edge)
 
-    async def handle_query_graph(raw_data: dict):
-        data = QueryGraphPayload.from_dict(raw_data)
+    return ParsedGraph(nodes=nodes, edges=edges)
 
-        nodes: List[GraphNode] = await kv.list(KV.graph_nodes, GraphNode)
-        edges: List[GraphEdge] = await kv.list(KV.graph_edges, GraphEdge)
 
-        if data.node_id:
-            nodes = [n for n in nodes if n.id == data.node_id]
-            edges = [
-                e for e in edges
-                if e.source_id == data.node_id or e.target_id == data.node_id
-            ]
+def register_graph_function(sdk: IIIClient, kv: StateKV, provider: MemoryProvider):
+    async def handle_graph_extract(raw_data: dict):
+        data = GraphExtractPayload.from_dict(raw_data)
 
-        if data.type:
-            nodes = [n for n in nodes if n.type == data.type]
+        if not data.observations:
+            return {"success": False, "error": "no observations provided"}
 
-        if data.relation:
-            edges = [e for e in edges if e.relation == data.relation]
+        prompt = build_graph_extraction_prompt(
+            [
+                {
+                    "type": o.type,
+                    "title": o.title,
+                    "subtitle": o.subtitle,
+                    "narrative": o.narrative,
+                    "facts": o.facts,
+                    "concepts": o.concepts,
+                    "files": o.files,
+                    "importance": o.importance,
+                    "confidence": o.confidence,
+                }
+                for o in data.observations]
+        )
 
-        logger.info("Graph query: %d nodes, %d edges", len(nodes), len(edges))
-        return {"success": True, "nodes": nodes, "edges": edges}
+        try:
+            response = await provider.compress(GRAPH_EXTRACTION_SYSTEM, prompt)
 
-    sdk.register_function({"id": "mem::graph-add-node"}, handle_add_node)
-    sdk.register_function({"id": "mem::graph-add-edge"}, handle_add_edge)
-    sdk.register_function({"id": "mem::graph-query"}, handle_query_graph)
+            obs_ids = [o.id for o in data.observations]
+
+            graph = parse_graph_json(response, obs_ids)
+            existing_nodes = await kv.list(KV.graph_nodes, GraphNode)
+            existing_edges = await kv.list(KV.graph_edges, GraphEdge)
+
+            for node in graph.nodes:
+                existing = next(
+                    (
+                        n for n in existing_nodes
+                        if n.name == node.name and n.type == node.type
+                    ), None)
+
+                if existing:
+                    merged = GraphNode(
+                        id=existing.id,
+                        type=existing.type,
+                        name=existing.name,
+                        properties={**existing.properties, **node.properties},
+                        source_obs_ids=list(
+                            set(existing.source_obs_ids + obs_ids)
+                        ),
+                        created_at=existing.created_at,
+                    )
+
+                    await kv.set(KV.graph_nodes, existing.id, merged)
+
+                    idx = next(
+                        (i for i, n in enumerate(existing_nodes)
+                         if n.id == existing.id),
+                        -1,
+                    )
+                    if idx != -1:
+                        existing_nodes[idx] = merged
+                else:
+                    await kv.set(KV.graph_nodes, node.id, node)
+                    existing_nodes.append(node)
+
+            for edge in graph.edges:
+                edge_key = f"{edge.source_node_id}|{edge.target_node_id}|{edge.type}"
+
+                existing_edge = next(
+                    (
+                        e
+                        for e in existing_edges
+                        if f"{e.source_node_id}|{e.target_node_id}|{e.type}" == edge_key
+                    ),
+                    None,
+                )
+
+                if existing_edge:
+                    merged_edge = GraphEdge(
+                        id=existing_edge.id,
+                        type=existing_edge.type,
+                        source_node_id=existing_edge.source_node_id,
+                        target_node_id=existing_edge.target_node_id,
+                        weight=existing_edge.weight,
+                        source_obs_ids=list(
+                            set(existing_edge.source_obs_ids + obs_ids)
+                        ),
+                        created_at=existing_edge.created_at,
+                        tcommit=existing_edge.tcommit,
+                        tvalid=existing_edge.tvalid,
+                        tvalid_end=existing_edge.tvalid_end,
+                        context=existing_edge.context,
+                        version=existing_edge.version,
+                        superseded_by=existing_edge.superseded_by,
+                        is_latest=existing_edge.is_latest,
+                        stale=existing_edge.stale,
+                    )
+
+                    await kv.set(KV.graph_edges, existing_edge.id, merged_edge)
+
+                    idx = next(
+                        (i for i, e in enumerate(existing_edges)
+                         if e.id == existing_edge.id),
+                        -1,
+                    )
+                    if idx != -1:
+                        existing_edges[idx] = merged_edge
+                else:
+                    await kv.set(KV.graph_edges, edge.id, edge)
+                    existing_edges.append(edge)
+
+            logger.info("Graph extraction complete")
+
+            return {
+                "success": True,
+                "nodes_added": len(graph.nodes),
+                "edges_added": len(graph.edges),
+            }
+
+        except Exception as err:
+            logger.warning("Failed to parse graph response (error: %s)", {
+                "error": err
+            })
+            return {"success": False, "error": "graph_extracted_parsing_failed"}
+
+    async def handle_graph_stats(raw_data: dict):
+        nodes = await kv.list(KV.graph_nodes, GraphNode)
+        edges = await kv.list(KV.graph_edges, GraphEdge)
+
+        nodes_by_type: dict[str, int] = {}
+        for n in nodes:
+            nodes_by_type[n.type] = nodes_by_type.get(n.type, 0) + 1
+
+        edges_by_type: dict[str, int] = {}
+        for e in edges:
+            edges_by_type[e.type] = edges_by_type.get(e.type, 0) + 1
+
+        return {
+            "total_nodes": len(nodes),
+            "total_edges": len(edges),
+            "nodes_by_type": nodes_by_type,
+            "edges_by_type": edges_by_type,
+        }
+
+    sdk.register_function({"id": "mem::graph_extract"}, handle_graph_extract)
+    sdk.register_function({"id": "mem::graph_stats"}, handle_graph_stats)

@@ -30,8 +30,8 @@ def main() -> None:
                 "cwd": project,
                 "timestamp":  datetime.now(timezone.utc).isoformat(),
                 "data": {
-                    "agent_id": data.agent_id,
-                    "agent_type": data.agent_type,
+                    "agent_id": data.get("agent_id"),
+                    "agent_type": data.get("agent_type"),
                     "last_message": last_msg
                 }
             },
